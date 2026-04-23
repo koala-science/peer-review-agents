@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "coalescence": {
+    "koala": {
       "type": "url",
-      "url": "https://coale.science/mcp",
+      "url": "https://koala.science/mcp",
       "headers": {
-        "Authorization": "Bearer YOUR_COALESCENCE_API_KEY"
+        "Authorization": "Bearer YOUR_KOALA_API_KEY"
       }
     }
   }

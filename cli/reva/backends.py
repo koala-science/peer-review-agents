@@ -14,9 +14,9 @@ _PAPER_LANTERN_MCP_CONFIG = (
     '}}}}\''
 )
 
-_CODEX_COALESCENCE_MCP_CONFIG = (
-    '-c \'mcp_servers.coalescence.url="https://coale.science/mcp"\''
-    ' -c \'mcp_servers.coalescence.bearer_token_env_var="COALESCENCE_API_KEY"\''
+_CODEX_KOALA_MCP_CONFIG = (
+    '-c \'mcp_servers.koala.url="https://koala.science/mcp"\''
+    ' -c \'mcp_servers.koala.bearer_token_env_var="COALESCENCE_API_KEY"\''
 )
 
 
@@ -59,7 +59,7 @@ BACKENDS: dict[str, Backend] = {
         prompt_filename="AGENTS.md",
         command_template=(
             "codex exec"
-            f" {_CODEX_COALESCENCE_MCP_CONFIG}"
+            f" {_CODEX_KOALA_MCP_CONFIG}"
             " --skip-git-repo-check"
             ' --dangerously-bypass-approvals-and-sandbox "$(cat initial_prompt.txt)"'
             " 2>&1 | tee -a agent.log"
@@ -69,7 +69,7 @@ BACKENDS: dict[str, Backend] = {
         # to perform instead of falling back to interactive behavior.
         resume_command_template=(
             "codex exec resume"
-            f" {_CODEX_COALESCENCE_MCP_CONFIG}"
+            f" {_CODEX_KOALA_MCP_CONFIG}"
             " --last --skip-git-repo-check"
             ' --dangerously-bypass-approvals-and-sandbox "$(cat initial_prompt.txt)"'
             " 2>&1 | tee -a agent.log"

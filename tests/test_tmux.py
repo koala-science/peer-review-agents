@@ -217,14 +217,13 @@ def test_launch_script_loops_forever_without_duration():
     assert "TIMEOUT=" not in script.replace("SESSION_TIMEOUT", "")
 
 
-def test_launch_script_loads_agent_api_key_inside_loop():
-    """The api key file is written after first registration, so it must be
-    re-sourced on every cycle, not once at startup."""
+def test_launch_script_loads_agent_env_inside_loop():
+    """The .env and .api_key files are written after first registration, so
+    they must be re-sourced on every cycle, not once at startup."""
     script = build_launch_script(
         "echo hi 2>&1 | tee -a agent.log", duration_hours=1.0
     )
-    # Called inside _make_run_block, which is inside the while loop
-    assert script.count("_load_agent_api_key") >= 2  # definition + at least one call
+    assert script.count("_load_agent_env") >= 2
 
 
 # ── _make_run_block ───────────────────────────────────────────────────

@@ -1,8 +1,8 @@
-# Creating Agents
+# Peer Review Agents
 
-Code for the agent creation workstream of the McGill NLP AI-for-Science retreat.
+Code for the agent creation workstream targeting the [Koala Science](https://koala.science) ICML 2026 Agent Review Competition (April 24–30, 2026).
 
-The goal is to build a population of heterogeneous reviewing agents that interact on the [Coalescence](https://coale.science) scientific paper evaluation platform. Agents self-register, post reviews, comment, vote, and earn reputation — the aggregate output is a leaderboard of papers ranked by multi-agent evaluation.
+The goal is to build a population of heterogeneous reviewing agents that interact on Koala Science. Agents self-register, read ICML 2026 submissions, discuss them in threaded comments, cite each other in verdicts, and earn karma based on the quality of their contributions — the aggregate output is a leaderboard ranking agents by how well their verdicts predicted the real ICML accept/reject decisions.
 
 ## Quickstart
 
@@ -42,7 +42,7 @@ npm install -g @google/gemini-cli          # gemini-cli backend
 ```
 agent_definition/
   GLOBAL_RULES.md           # Platform-wide rules injected into every agent's prompt
-  platform_skills.md        # Points agents to coale.science/skill.md for onboarding
+  platform_skills.md        # Points agents to koala.science/skill.md for onboarding
   prompt_builder.py         # Assembles the full system prompt from all sections
   roles/                    # 9 evaluation role prompts (including CPU reproducibility)
   personas/                 # 12 persona JSON files
@@ -140,7 +140,7 @@ uv run reva list personas
 
 ## Agent identity and persistence
 
-Agents self-register on Coalescence at first launch. Their API key is saved to `.api_key` in the agent directory and reused on subsequent restarts — no manual key management needed.
+Agents self-register on Koala Science at first launch. Their API key is saved to `.api_key` in the agent directory and reused on subsequent restarts — no manual key management needed.
 
 Each agent runs in a tmux session (`reva_<name>`) and restarts automatically if it exits. The session loops until the duration expires or you kill it.
 
@@ -153,5 +153,6 @@ Two GPU backends are available for `04_reproducibility_and_transparency` agents:
 
 ## Related resources
 
-- Platform: [coale.science](https://coale.science) — [skill.md](https://coale.science/skill.md)
+- Platform: [koala.science](https://koala.science) — [skill.md](https://koala.science/skill.md)
+- Competition rules: [koala.science/competition](https://koala.science/competition)
 - Persona prompt ideas: [HuggingFace Space](https://huggingface.co/spaces/McGill-NLP/AI-For-Science-Retreat/tree/main)

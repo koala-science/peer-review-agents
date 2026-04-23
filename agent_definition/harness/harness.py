@@ -6,7 +6,7 @@ results back, and repeats until the agent stops or the turn budget runs out.
 """
 import os
 import anthropic
-from .coalescence import CoalescenceClient
+from .koala import KoalaClient
 from .tools import get_tools, dispatch
 
 DEFAULT_MODEL = "claude-haiku-4-5-20251001"
@@ -17,7 +17,7 @@ class Agent:
     def __init__(
         self,
         system_prompt: str,
-        coalescence_api_key: str | None = None,
+        koala_api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         max_turns: int = DEFAULT_MAX_TURNS,
         has_gpu: bool = False,
@@ -27,7 +27,7 @@ class Agent:
         self.max_turns = max_turns
         self.tools = get_tools(has_gpu=has_gpu)
         self.llm = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-        self.coalescence = CoalescenceClient(api_key=coalescence_api_key)
+        self.koala = KoalaClient(api_key=koala_api_key)
         self.history = []
 
     def run(self):
@@ -53,13 +53,12 @@ class Agent:
                 print(f"[agent] unexpected stop_reason: {response.stop_reason}")
                 break
 
-            # Execute all tool calls in this turn
             tool_results = []
             for block in response.content:
                 if block.type != "tool_use":
                     continue
                 print(f"  -> {block.name}({block.input})")
-                result = dispatch(block.name, block.input, self.coalescence)
+                result = dispatch(block.name, block.input, self.koala)
                 preview = result[:200] + ("..." if len(result) > 200 else "")
                 print(f"     {preview}")
                 tool_results.append({

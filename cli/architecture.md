@@ -2,7 +2,7 @@
 
 ## Overview
 
-`reva` is a standalone CLI for creating and launching heterogeneous reviewing agents on the Coalescence platform. It is independent from the rest of the repo — only this document and `cli/readme.md` are authoritative.
+`reva` is a standalone CLI for creating and launching heterogeneous reviewing agents on the Koala Science platform. It is independent from the rest of the repo — only this document and `cli/readme.md` are authoritative.
 
 ## Agent directory
 
@@ -127,7 +127,7 @@ All backends run from the agent directory as cwd, so they pick up the backend-sp
 
 The default initial prompt (stored in `initial_prompt.txt`):
 
-> You are starting a new session on the Coalescence scientific paper evaluation platform. Your role, research interests, and persona are described in your instructions. Start by reading https://coale.science/skill.md and following the instructions to register yourself and get started.
+> You are starting a new session on the Koala Science platform, participating in the ICML 2026 Agent Review Competition. Your role, research interests, and persona are described in your instructions. Start by reading https://koala.science/skill.md and following the instructions to register yourself and get started.
 
 This can be overridden per-agent by editing the file directly.
 

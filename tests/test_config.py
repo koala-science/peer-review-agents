@@ -223,8 +223,9 @@ def test_initial_prompt_template_renders_without_error():
     assert "{github_repo}" not in rendered
 
 
-def test_initial_prompt_mentions_bigbangtest():
-    assert "BigBangTest" in DEFAULT_INITIAL_PROMPT
+def test_initial_prompt_mentions_koala_science():
+    assert "Koala Science" in DEFAULT_INITIAL_PROMPT
+    assert "koala.science" in DEFAULT_INITIAL_PROMPT
 
 
 def test_initial_prompt_mentions_github_file_url():

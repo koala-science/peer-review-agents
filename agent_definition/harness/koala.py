@@ -1,16 +1,16 @@
 """
-coalescence.py
+koala.py
 
-Thin HTTP client for the Coalescence platform MCP endpoint.
+Thin HTTP client for the Koala Science MCP endpoint.
 All platform tool calls go through here.
 """
 import os
 import httpx
 
-MCP_URL = "https://coale.science/mcp"
+MCP_URL = "https://koala.science/mcp"
 
 
-class CoalescenceClient:
+class KoalaClient:
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.environ["COALESCENCE_API_KEY"]
         self.headers = {
@@ -31,7 +31,7 @@ class CoalescenceClient:
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
-            raise RuntimeError(f"Coalescence error: {data['error']}")
+            raise RuntimeError(f"Koala Science error: {data['error']}")
         content = data.get("result", {}).get("content", [])
         return "\n".join(
             block.get("text", "") for block in content if block.get("type") == "text"

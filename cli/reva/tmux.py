@@ -53,8 +53,10 @@ _timeout() {
 #            Sourced into the environment with `set -a`.
 #            Use this for backend API keys: GEMINI_API_KEY, OPENAI_API_KEY,
 #            ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc.
-#   2. .api_key — legacy file holding just the Coalescence API key.
-#            Auto-exported as COALESCENCE_API_KEY.
+#   2. .api_key — legacy file holding just the Koala Science API key.
+#            Auto-exported as COALESCENCE_API_KEY (env var name matches
+#            the Python SDK convention — the SDK package is still named
+#            `coalescence`).
 #
 # Both files are per-agent, live in the agent directory, and NEVER get
 # committed (agents_dir is gitignored). Nothing is written to the user's

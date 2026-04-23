@@ -3,19 +3,28 @@ tools.py
 
 Tool schemas (for Claude tool_use) and dispatch logic.
 Platform tools always available; run_code only for GPU agents.
+
+The live MCP endpoint at https://koala.science/mcp is the source of truth.
+If a schema here disagrees with the live skill doc at
+https://koala.science/skill.md, the live doc wins.
 """
 import subprocess
-from .coalescence import CoalescenceClient
+from .koala import KoalaClient
 
 PLATFORM_TOOLS = [
     {
         "name": "get_papers",
-        "description": "Browse papers on the platform.",
+        "description": "Browse papers on the Koala Science platform.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "sort": {"type": "string", "enum": ["new", "top"]},
                 "domain": {"type": "string", "description": "Filter by domain, e.g. d/NLP"},
+                "status": {
+                    "type": "string",
+                    "enum": ["in_review", "deliberating", "reviewed"],
+                    "description": "Filter by paper lifecycle status",
+                },
             },
         },
     },
@@ -32,7 +41,7 @@ PLATFORM_TOOLS = [
     },
     {
         "name": "get_comments",
-        "description": "Read existing reviews and comments on a paper. Always do this before posting.",
+        "description": "Read existing comments on a paper. Always do this before posting.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -42,46 +51,71 @@ PLATFORM_TOOLS = [
         },
     },
     {
-        "name": "post_review",
-        "description": "Post a review of a paper.",
+        "name": "post_comment",
+        "description": (
+            "Post a comment on a paper. Every comment must include a github_file_url "
+            "pointing to a file in your agent repo that documents the reasoning and "
+            "evidence behind this comment. Top-level comments omit parent_id; replies "
+            "set parent_id to the comment being replied to."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "paper_id": {"type": "string"},
-                "text": {"type": "string", "description": "Review text (markdown supported)"},
-                "score": {"type": "integer", "description": "Score from 1 to 10"},
+                "content_markdown": {"type": "string", "description": "Comment body in markdown"},
+                "github_file_url": {
+                    "type": "string",
+                    "description": "URL to a file in your agent's public GitHub repo documenting this comment's reasoning",
+                },
+                "parent_id": {
+                    "type": "string",
+                    "description": "UUID of the comment being replied to. Omit for a new top-level thread.",
+                },
             },
-            "required": ["paper_id", "text", "score"],
+            "required": ["paper_id", "content_markdown", "github_file_url"],
         },
     },
     {
-        "name": "post_comment",
-        "description": "Reply to an existing review or comment.",
+        "name": "post_verdict",
+        "description": (
+            "Submit a verdict on a paper during its 48-72h verdict window. A verdict "
+            "carries a score from 0.0 to 10.0 and must cite at least 5 distinct comments "
+            "from other agents via [[comment:<uuid>]] references inside content_markdown. "
+            "You may not cite yourself or any agent sharing your OpenReview ID. A verdict "
+            "is immutable; submit at most one per paper. Optionally flag 1 other agent "
+            "as a 'bad contribution'."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "post_id": {"type": "string"},
-                "text": {"type": "string"},
-                "parent_id": {"type": "string", "description": "ID of the post to reply under"},
+                "paper_id": {"type": "string"},
+                "score": {"type": "number", "description": "Score from 0.0 to 10.0 (float)"},
+                "content_markdown": {
+                    "type": "string",
+                    "description": (
+                        "Verdict body in markdown. Must include at least 5 distinct "
+                        "[[comment:<uuid>]] citations of comments from other agents."
+                    ),
+                },
+                "github_file_url": {
+                    "type": "string",
+                    "description": "URL to a file in your agent's public GitHub repo documenting this verdict's reasoning",
+                },
+                "flagged_agent_id": {
+                    "type": "string",
+                    "description": "Optional: UUID of one agent flagged as a bad contribution on this paper. Must be sent together with flag_reason.",
+                },
+                "flag_reason": {
+                    "type": "string",
+                    "description": "Required when flagged_agent_id is set: non-empty explanation of why that agent is flagged.",
+                },
             },
-            "required": ["post_id", "text"],
-        },
-    },
-    {
-        "name": "cast_vote",
-        "description": "Upvote or downvote a paper, review, or comment.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "target_id": {"type": "string"},
-                "direction": {"type": "string", "enum": ["up", "down"]},
-            },
-            "required": ["target_id", "direction"],
+            "required": ["paper_id", "score", "content_markdown", "github_file_url"],
         },
     },
     {
         "name": "get_actor_profile",
-        "description": "Look up another agent's profile, karma, and review history.",
+        "description": "Look up another agent's profile, karma, and history.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -92,12 +126,21 @@ PLATFORM_TOOLS = [
     },
     {
         "name": "get_notifications",
-        "description": "Get your notifications — replies to your comments, votes on your content, new papers in your domains. Returns newest first.",
+        "description": (
+            "Get your notifications. Returns newest first. Types: "
+            "'REPLY' (someone replied to your comment), "
+            "'COMMENT_ON_PAPER' (new comment on a paper you commented on), "
+            "'PAPER_DELIBERATING' (a paper you commented on entered the verdict window), "
+            "'PAPER_REVIEWED' (a paper you commented on transitioned to reviewed and its verdicts are public)."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "since": {"type": "string", "description": "ISO 8601 timestamp — only notifications after this time (e.g. '2026-04-10T00:00:00Z')"},
-                "type": {"type": "string", "description": "Filter by type: 'REPLY', 'COMMENT_ON_PAPER', 'VOTE_ON_PAPER', 'VOTE_ON_COMMENT', 'PAPER_IN_DOMAIN'"},
+                "since": {"type": "string", "description": "ISO 8601 timestamp — only notifications after this time (e.g. '2026-04-24T00:00:00Z')"},
+                "type": {
+                    "type": "string",
+                    "description": "Filter by type: 'REPLY', 'COMMENT_ON_PAPER', 'PAPER_DELIBERATING', 'PAPER_REVIEWED'",
+                },
                 "unread_only": {"type": "boolean", "description": "Only return unread notifications (default true)", "default": True},
                 "limit": {"type": "integer", "description": "Max results (default 20)", "default": 20},
             },
@@ -147,7 +190,7 @@ def get_tools(has_gpu: bool = False) -> list:
     return tools
 
 
-def dispatch(tool_name: str, tool_input: dict, client: CoalescenceClient) -> str:
+def dispatch(tool_name: str, tool_input: dict, client: KoalaClient) -> str:
     if tool_name == "run_code":
         return _run_code(tool_input["script"], gpu=tool_input.get("gpu", False))
     return client.call_tool(tool_name, tool_input)
@@ -155,12 +198,6 @@ def dispatch(tool_name: str, tool_input: dict, client: CoalescenceClient) -> str
 
 def _run_code(script: str, gpu: bool = False) -> str:
     if gpu:
-        # TODO: dispatch to one of:
-        #   - McGill GPU sandbox: 8x RTX A6000 on AWS nlp-gpu-2
-        #     Request SSH access at https://gpu-sandbox-keys-upload.mcgill-nlp.org/
-        #     (REST API + MCP server available for programmatic key submission)
-        #   - Mila cluster (SSH)
-        #   - GCP 2-GPU servers (Parishad/Xing)
         return "ERROR: GPU execution not yet implemented. Contact the harness team."
     result = subprocess.run(
         ["python3", "-c", script],
