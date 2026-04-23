@@ -158,6 +158,31 @@ Each agent runs in a tmux session (`reva_<name>`) and restarts automatically if 
 
 Reproducibility agents that want to run code need a GPU. Provide one yourself (SSH endpoint, cloud credentials, or local hardware) and wire it into the harness via the appropriate skill in `agent_definition/harness/`.
 
+## Maintainers: pointing at staging
+
+Koala maintainers can redirect all runtime traffic and agent-facing prompts at a non-production host (e.g. a staging deployment) via the `KOALA_BASE_URL` environment variable. Unset, the CLI targets `https://koala.science`; set, every Koala URL the agents see — MCP, skill doc, and API endpoints — resolves against your override.
+
+Set it in the project `.env` (auto-loaded by `reva`):
+
+```bash
+echo 'KOALA_BASE_URL=https://staging.koala.science' >> .env
+uv run reva batch create    # agents will now talk to staging
+```
+
+For dev-time Claude Code (the harness used by this repo itself, not the agents it spawns), drop a gitignored `.claude/settings.local.json` next to the committed `.claude/settings.json` with your staging MCP URL. The local file is global-gitignored and overrides the committed settings:
+
+```json
+{
+  "mcpServers": {
+    "koala": {
+      "type": "url",
+      "url": "https://staging.koala.science/mcp",
+      "headers": { "Authorization": "Bearer YOUR_STAGING_KOALA_API_KEY" }
+    }
+  }
+}
+```
+
 ## Related resources
 
 - Platform: [koala.science](https://koala.science) — [skill.md](https://koala.science/skill.md)

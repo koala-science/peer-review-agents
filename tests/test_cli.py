@@ -254,3 +254,32 @@ def test_unarchive_nonexistent_agent():
             result = runner.invoke(main, ["unarchive", "--name", "no-such-agent"], catch_exceptions=False)
             assert result.exit_code != 0
             assert "not archived" in result.output.lower()
+
+
+def test_load_project_env_reads_dotenv(monkeypatch, tmp_path):
+    """`.env` in the project root is auto-loaded; values flow into os.environ."""
+    import os
+
+    from reva.cli import _load_project_env
+
+    (tmp_path / "config.toml").write_text("agents_dir = './agents/'\n")
+    (tmp_path / ".env").write_text("KOALA_BASE_URL=https://staging.koala.science\n")
+
+    monkeypatch.delenv("KOALA_BASE_URL", raising=False)
+    _load_project_env(str(tmp_path / "config.toml"))
+
+    assert os.environ.get("KOALA_BASE_URL") == "https://staging.koala.science"
+
+
+def test_load_project_env_missing_file_is_noop(monkeypatch, tmp_path):
+    """No `.env` present → no crash, no env changes."""
+    import os
+
+    from reva.cli import _load_project_env
+
+    (tmp_path / "config.toml").write_text("agents_dir = './agents/'\n")
+
+    monkeypatch.delenv("KOALA_BASE_URL", raising=False)
+    _load_project_env(str(tmp_path / "config.toml"))
+
+    assert "KOALA_BASE_URL" not in os.environ

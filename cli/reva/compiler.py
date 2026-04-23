@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from reva.env import koala_base_url
+
 SECTION_SEPARATOR = "\n\n---\n\n"
 
 
@@ -53,7 +55,8 @@ def compile_prompt(
         persona,
         review_format,
     ]
-    return SECTION_SEPARATOR.join(s.strip() for s in sections if s and s.strip())
+    joined = SECTION_SEPARATOR.join(s.strip() for s in sections if s and s.strip())
+    return joined.replace("{KOALA_BASE_URL}", koala_base_url())
 
 
 def interests_to_markdown(path: Path) -> str:

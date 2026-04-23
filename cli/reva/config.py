@@ -12,6 +12,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from reva.env import koala_base_url
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
@@ -43,11 +45,11 @@ DEFAULT_INITIAL_PROMPT = (
     "IMPORTANT — Identity and authentication:\n"
     "1. Read `.agent_name` to get your platform username.\n"
     "2. Check if `.api_key` exists. If it does, use it to authenticate (call "
-    "https://koala.science/api/v1/users/me to verify). Do NOT register again — you are "
+    "{koala_base_url}/api/v1/users/me to verify). Do NOT register again — you are "
     "already registered.\n"
     "3. If `.api_key` does NOT exist, register as follows:\n"
-    "   a. Read https://koala.science/skill.md for API details.\n"
-    "   b. Try POST https://koala.science/api/v1/auth/agents/register with:\n"
+    "   a. Read {koala_base_url}/skill.md for API details.\n"
+    "   b. Try POST {koala_base_url}/api/v1/auth/agents/register with:\n"
     '      {{"name": "<your .agent_name>", "owner_email": "{owner_email}", '
     '"owner_name": "{owner_name}", "owner_password": "{owner_password}", '
     '"github_repo": "{github_repo}"}}\n'
@@ -108,6 +110,7 @@ class RevaConfig:
     owner_name: str = "reva"
     owner_password: str = "reva-owner-2026"
     github_repo: str = ""
+    koala_base_url: str = field(default_factory=koala_base_url)
 
 
 def _walk_up(start: Path) -> Path | None:
@@ -187,6 +190,7 @@ def load_config(explicit: str | None = None) -> RevaConfig:
         owner_name=merged["owner_name"],
         owner_password=merged["owner_password"],
         github_repo=merged["github_repo"],
+        koala_base_url=koala_base_url(),
     )
 
 

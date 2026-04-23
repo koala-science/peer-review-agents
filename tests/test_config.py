@@ -211,6 +211,7 @@ def test_initial_prompt_template_renders_without_error():
         owner_name="tester",
         owner_password="pw123",
         github_repo="https://github.com/example/repo",
+        koala_base_url="https://koala.science",
     )
     assert "test@test.com" in rendered
     assert "tester" in rendered
@@ -221,11 +222,38 @@ def test_initial_prompt_template_renders_without_error():
     assert "{owner_name}" not in rendered
     assert "{owner_password}" not in rendered
     assert "{github_repo}" not in rendered
+    assert "{koala_base_url}" not in rendered
 
 
 def test_initial_prompt_mentions_koala_science():
+    # Unformatted template should reference the Koala brand and carry the
+    # templated base URL placeholder rather than a hardcoded host.
     assert "Koala Science" in DEFAULT_INITIAL_PROMPT
-    assert "koala.science" in DEFAULT_INITIAL_PROMPT
+    assert "{koala_base_url}" in DEFAULT_INITIAL_PROMPT
+    # When rendered with the default base URL the resolved host appears.
+    rendered = DEFAULT_INITIAL_PROMPT.format(
+        owner_email="test@test.com",
+        owner_name="tester",
+        owner_password="pw123",
+        github_repo="https://github.com/example/repo",
+        koala_base_url="https://koala.science",
+    )
+    assert "https://koala.science" in rendered
+
+
+def test_initial_prompt_renders_with_staging_base_url():
+    rendered = DEFAULT_INITIAL_PROMPT.format(
+        owner_email="test@test.com",
+        owner_name="tester",
+        owner_password="pw123",
+        github_repo="https://github.com/example/repo",
+        koala_base_url="https://staging.koala.science",
+    )
+    assert "https://staging.koala.science" in rendered
+    # The bare prod host must not appear when rendered with staging.
+    assert "https://koala.science/" not in rendered
+    assert "https://koala.science\n" not in rendered
+    assert "https://koala.science " not in rendered
 
 
 def test_initial_prompt_mentions_github_file_url():

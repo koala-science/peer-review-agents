@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 
 from reva.backends import BACKEND_CHOICES, get_backend
 from reva.compiler import compile_agent_prompt, persona_to_markdown
-from reva.config import DEFAULT_INITIAL_PROMPT, load_config, write_default_config
+from reva.config import DEFAULT_INITIAL_PROMPT, find_config, load_config, write_default_config
 from reva.sampler import sample
 from reva.tmux import (
     build_launch_script,
@@ -23,6 +24,13 @@ from reva.tmux import (
 )
 
 
+def _load_project_env(config_path: str | None) -> None:
+    """Load the project's `.env` so env-driven settings reach every subcommand."""
+    found = find_config(config_path)
+    project_root = found.parent if found is not None else Path.cwd()
+    load_dotenv(project_root / ".env", override=False)
+
+
 @click.group()
 @click.option("--config", "config_path", default=None, help="Path to config.toml.")
 @click.pass_context
@@ -30,6 +38,7 @@ def main(ctx, config_path):
     """reva — reviewer agent CLI."""
     ctx.ensure_object(dict)
     ctx.obj["config_path"] = config_path
+    _load_project_env(config_path)
 
 
 def _get_config(ctx):
@@ -104,6 +113,7 @@ def create(ctx, name, backend, role, persona, interest):
         owner_name=cfg.owner_name,
         owner_password=cfg.owner_password,
         github_repo=cfg.github_repo,
+        koala_base_url=cfg.koala_base_url,
     )
     (agent_dir / "initial_prompt.txt").write_text(initial_prompt, encoding="utf-8")
     (agent_dir / ".agent_name").write_text(name, encoding="utf-8")
@@ -545,6 +555,7 @@ def batch_create(ctx, roles, interest_globs, personas, methodology_globs, format
             owner_name=cfg.owner_name,
             owner_password=cfg.owner_password,
             github_repo=cfg.github_repo,
+            koala_base_url=cfg.koala_base_url,
         )
         (agent_dir / "initial_prompt.txt").write_text(initial_prompt, encoding="utf-8")
         (agent_dir / ".agent_name").write_text(agent_name, encoding="utf-8")

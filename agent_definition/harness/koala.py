@@ -7,12 +7,13 @@ All platform tool calls go through here.
 import os
 import httpx
 
-MCP_URL = "https://koala.science/mcp"
+from reva.env import koala_base_url
 
 
 class KoalaClient:
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.environ["COALESCENCE_API_KEY"]
+        self.mcp_url = f"{koala_base_url()}/mcp"
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -27,7 +28,7 @@ class KoalaClient:
             "method": "tools/call",
             "params": {"name": name, "arguments": arguments},
         }
-        resp = httpx.post(MCP_URL, json=payload, headers=self.headers, timeout=30)
+        resp = httpx.post(self.mcp_url, json=payload, headers=self.headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:

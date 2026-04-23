@@ -4,6 +4,7 @@ from pathlib import Path
 
 from reva.compiler import (
     SECTION_SEPARATOR,
+    compile_agent_prompt,
     compile_prompt,
     persona_to_markdown,
 )
@@ -115,3 +116,67 @@ def test_compile_prompt_strips_whitespace_from_sections():
     # Each section is stripped before joining
     assert "ROLE\n\n---" in result or "ROLE\n\n--" in result
     assert "INTERESTS" in result
+
+
+def test_compile_prompt_substitutes_koala_base_url_default(tmp_path, monkeypatch):
+    """`{KOALA_BASE_URL}` tokens in any source file are replaced by the
+    accessor value in the compiled prompt."""
+    monkeypatch.delenv("KOALA_BASE_URL", raising=False)
+
+    global_rules = tmp_path / "GLOBAL_RULES.md"
+    global_rules.write_text(
+        "Fetch {KOALA_BASE_URL}/skill.md for onboarding.\n"
+    )
+    platform_skills = tmp_path / "platform_skills.md"
+    platform_skills.write_text(
+        "See {KOALA_BASE_URL}/skill.md for live docs.\n"
+    )
+    role = tmp_path / "role.md"
+    role.write_text("Reviewer role.\n")
+    interests = tmp_path / "interests.md"
+    interests.write_text("- NLP\n")
+    persona = tmp_path / "persona.json"
+    persona.write_text(json.dumps({
+        "name": "P",
+        "description": "d",
+        "trait_vector": {},
+        "trait_definitions": {},
+    }))
+
+    result = compile_agent_prompt(
+        role_path=role,
+        persona_path=persona,
+        interest_path=interests,
+        global_rules_path=global_rules,
+        platform_skills_path=platform_skills,
+    )
+    assert "{KOALA_BASE_URL}" not in result
+    assert "https://koala.science/skill.md" in result
+
+
+def test_compile_prompt_substitutes_koala_base_url_override(tmp_path, monkeypatch):
+    monkeypatch.setenv("KOALA_BASE_URL", "https://staging.koala.science")
+
+    global_rules = tmp_path / "GLOBAL_RULES.md"
+    global_rules.write_text("Fetch {KOALA_BASE_URL}/skill.md\n")
+    role = tmp_path / "role.md"
+    role.write_text("Reviewer role.\n")
+    interests = tmp_path / "interests.md"
+    interests.write_text("- NLP\n")
+    persona = tmp_path / "persona.json"
+    persona.write_text(json.dumps({
+        "name": "P",
+        "description": "d",
+        "trait_vector": {},
+        "trait_definitions": {},
+    }))
+
+    result = compile_agent_prompt(
+        role_path=role,
+        persona_path=persona,
+        interest_path=interests,
+        global_rules_path=global_rules,
+    )
+    assert "{KOALA_BASE_URL}" not in result
+    assert "https://staging.koala.science/skill.md" in result
+    assert "https://koala.science/skill.md" not in result

@@ -1,18 +1,14 @@
 """Tests for reva.backends — backend registry and command templates."""
 import pytest
 
-from reva.backends import BACKEND_CHOICES, BACKENDS, Backend, get_backend
+from reva.backends import BACKEND_CHOICES, Backend, get_backend
 
 
 EXPECTED_BACKENDS = {"claude-code", "gemini-cli", "codex", "aider", "opencode"}
 
 
 def test_all_expected_backends_registered():
-    assert set(BACKENDS.keys()) == EXPECTED_BACKENDS
-
-
-def test_backend_choices_matches_registry():
-    assert set(BACKEND_CHOICES) == set(BACKENDS.keys())
+    assert set(BACKEND_CHOICES) == EXPECTED_BACKENDS
 
 
 @pytest.mark.parametrize("name", sorted(EXPECTED_BACKENDS))
