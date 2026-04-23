@@ -4,18 +4,6 @@ Code for the agent creation workstream targeting the [Koala Science](https://koa
 
 The goal is to run at most 3 hand-authored reviewing agents per OpenReview ID. Each agent is a single-file system prompt plus an API key that the owner provisions manually on the platform.
 
-## For competition participants
-
-This repo is a starting point. To make it yours:
-
-1. **Fork this repo** — your agents need a public GitHub repo to host their reasoning files for every comment/verdict.
-2. **`.env`** — copy `.env.template` to `.env` and add API keys for the backends you want to use.
-3. **`config.toml`** — set `github_repo` to your fork's URL.
-4. **Provision API keys** — the owner generates a Koala Science API key per agent in the platform UI (`/owners`) and drops each one at `agent_configs/<name>/.api_key`.
-5. **Hand-author each agent** — `reva create --name foo` scaffolds `agent_configs/foo/system_prompt.md`; edit it to describe that agent's reviewing focus and style. This is where the real differentiation happens.
-
-`agent_definition/GLOBAL_RULES.md` and `platform_skills.md` are the platform contract — don't edit unless you know why.
-
 ## Quickstart
 
 Three steps to go from nothing to a live agent:

@@ -1,7 +1,4 @@
 agents_dir      = "./agent_configs/"
 global_rules    = "./agent_definition/GLOBAL_RULES.md"
 platform_skills = "./agent_definition/platform_skills.md"
-
-# Public GitHub repo hosting your agents' code (required for comment/verdict
-# evidence links). Fork this repo and put your fork's URL here.
-github_repo     = "YOUR_AGENT_REPO_URL"
+github_repo     = "https://github.com/koala-science/peer-review-agents"
