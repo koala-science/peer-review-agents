@@ -1,5 +1,4 @@
 """Tests for reva.config — TOML resolution and defaults."""
-import os
 from pathlib import Path
 
 import pytest
@@ -36,6 +35,16 @@ def test_default_config_file_contains_all_default_keys(tmp_path):
         assert key in content, f"{key} missing from default config"
 
 
+def test_default_config_keys_are_exactly_expected():
+    """DEFAULT_CONFIG should contain only the simplified set of keys."""
+    assert set(DEFAULT_CONFIG) == {
+        "agents_dir",
+        "global_rules",
+        "platform_skills",
+        "github_repo",
+    }
+
+
 def test_load_config_uses_explicit_path(tmp_path):
     cfg_path = write_default_config(tmp_path)
     config = load_config(str(cfg_path))
@@ -43,12 +52,10 @@ def test_load_config_uses_explicit_path(tmp_path):
     assert config.project_root == tmp_path
 
 
-def test_load_config_resolves_paths_relative_to_project_root(tmp_path):
+def test_load_config_resolves_agents_dir_relative_to_project_root(tmp_path):
     cfg_path = write_default_config(tmp_path)
     config = load_config(str(cfg_path))
     assert config.agents_dir == (tmp_path / "agents/").resolve()
-    assert config.personas_dir == (tmp_path / "personas/").resolve()
-    assert config.roles_dir == (tmp_path / "roles/").resolve()
 
 
 def test_load_config_without_path_falls_back_to_defaults(tmp_path, monkeypatch):
@@ -76,7 +83,6 @@ def test_find_config_walks_up_from_cwd(tmp_path, monkeypatch):
     sub.mkdir(parents=True)
     monkeypatch.chdir(sub)
     monkeypatch.delenv("REVA_CONFIG", raising=False)
-    # Avoid picking up a user-level ~/.reva/config.toml during the walk
     monkeypatch.setenv("HOME", str(tmp_path / "nonexistent-home"))
     found = find_config(None)
     assert found == cfg_path
@@ -84,35 +90,25 @@ def test_find_config_walks_up_from_cwd(tmp_path, monkeypatch):
 
 def test_find_config_reads_env_var(tmp_path, monkeypatch):
     cfg_path = write_default_config(tmp_path)
-    # Move to a directory that has no config.toml in its ancestry
     other = tmp_path / "unrelated"
     other.mkdir()
     monkeypatch.chdir(other)
     monkeypatch.setenv("REVA_CONFIG", str(cfg_path))
     monkeypatch.setenv("HOME", str(tmp_path / "nonexistent-home"))
-    # find_config walks up first, but with explicit env it should use env.
-    # Implementation walks up before env, so assert the env path still resolves
-    # via load_config + explicit precedence instead.
-    # (Precedence order: explicit arg > env > walk-up > ~/.reva/config.toml)
     found = find_config(None)
-    # If walk-up found nothing, env var takes effect
     if (other / CONFIG_FILENAME).exists() or any(
         (p / CONFIG_FILENAME).exists() for p in other.parents
     ):
-        pass  # walk-up succeeded, env not consulted — still OK
+        pass
     else:
         assert found == cfg_path
 
 
-def test_load_config_applies_custom_values(tmp_path):
+def test_load_config_applies_custom_agents_dir(tmp_path):
     cfg = tmp_path / CONFIG_FILENAME
-    cfg.write_text(
-        'agents_dir = "./my-agents/"\n'
-        'personas_dir = "./my-personas/"\n'
-    )
+    cfg.write_text('agents_dir = "./my-agents/"\n')
     config = load_config(str(cfg))
     assert config.agents_dir.name == "my-agents"
-    assert config.personas_dir.name == "my-personas"
 
 
 def test_load_config_merges_with_defaults(tmp_path):
@@ -121,36 +117,22 @@ def test_load_config_merges_with_defaults(tmp_path):
     cfg.write_text('agents_dir = "./override/"\n')
     config = load_config(str(cfg))
     assert config.agents_dir.name == "override"
-    # personas_dir should still be the default
-    assert config.personas_dir.name == "personas"
-
-
-def test_load_config_parses_review_methodology_weights(tmp_path):
-    cfg = tmp_path / CONFIG_FILENAME
-    cfg.write_text(
-        '[review_methodology_weights]\n'
-        'generic = 5\n'
-        'strict = 2\n'
-    )
-    config = load_config(str(cfg))
-    assert config.review_methodology_weights == {"generic": 5, "strict": 2}
+    assert config.global_rules_path.name == "GLOBAL_RULES.md"
 
 
 def test_default_initial_prompt_is_nonempty_string():
     assert isinstance(DEFAULT_INITIAL_PROMPT, str)
     assert len(DEFAULT_INITIAL_PROMPT) > 0
-    # Must mention the core identity files agents rely on
-    assert ".agent_name" in DEFAULT_INITIAL_PROMPT
+    # Must mention the .api_key file the owner provisions
     assert ".api_key" in DEFAULT_INITIAL_PROMPT
 
 
-def test_default_config_has_owner_fields():
-    assert "owner_email" in DEFAULT_CONFIG
-    assert "owner_name" in DEFAULT_CONFIG
-    assert "owner_password" in DEFAULT_CONFIG
-    assert DEFAULT_CONFIG["owner_email"] == "reva@agents.local"
-    assert DEFAULT_CONFIG["owner_name"] == "reva"
-    assert DEFAULT_CONFIG["owner_password"] == "reva-owner-2026"
+def test_default_initial_prompt_has_no_registration_language():
+    """Self-registration is gone — the prompt must not ask the agent to register."""
+    assert "register" not in DEFAULT_INITIAL_PROMPT.lower()
+    assert "owner_password" not in DEFAULT_INITIAL_PROMPT
+    assert "owner_email" not in DEFAULT_INITIAL_PROMPT
+    assert "owner_name" not in DEFAULT_INITIAL_PROMPT
 
 
 def test_default_config_has_github_repo():
@@ -158,84 +140,77 @@ def test_default_config_has_github_repo():
     assert DEFAULT_CONFIG["github_repo"] == ""
 
 
-def test_reva_config_has_owner_fields_with_defaults(tmp_path):
-    cfg_path = write_default_config(tmp_path)
-    config = load_config(str(cfg_path))
-    assert config.owner_email == "reva@agents.local"
-    assert config.owner_name == "reva"
-    assert config.owner_password == "reva-owner-2026"
+def test_default_config_has_no_owner_fields():
+    assert "owner_email" not in DEFAULT_CONFIG
+    assert "owner_name" not in DEFAULT_CONFIG
+    assert "owner_password" not in DEFAULT_CONFIG
 
 
-def test_reva_config_has_github_repo_default(tmp_path):
+def test_default_config_has_no_component_dirs():
+    for removed in (
+        "personas_dir",
+        "roles_dir",
+        "interests_dir",
+        "review_methodology_dir",
+        "review_format_dir",
+        "review_methodology",
+        "review_format",
+    ):
+        assert removed not in DEFAULT_CONFIG
+
+
+def test_reva_config_github_repo_default(tmp_path):
     cfg_path = write_default_config(tmp_path)
     config = load_config(str(cfg_path))
     assert config.github_repo == ""
 
 
-def test_load_config_reads_custom_owner_fields(tmp_path):
-    cfg = tmp_path / CONFIG_FILENAME
-    cfg.write_text(
-        'owner_email = "custom@example.com"\n'
-        'owner_name = "custom-owner"\n'
-        'owner_password = "s3cret"\n'
-    )
-    config = load_config(str(cfg))
-    assert config.owner_email == "custom@example.com"
-    assert config.owner_name == "custom-owner"
-    assert config.owner_password == "s3cret"
+def test_reva_config_has_no_owner_fields(tmp_path):
+    cfg_path = write_default_config(tmp_path)
+    config = load_config(str(cfg_path))
+    for removed in ("owner_email", "owner_name", "owner_password"):
+        assert not hasattr(config, removed)
+
+
+def test_reva_config_has_no_component_dirs(tmp_path):
+    cfg_path = write_default_config(tmp_path)
+    config = load_config(str(cfg_path))
+    for removed in (
+        "personas_dir",
+        "roles_dir",
+        "interests_dir",
+        "review_methodology_dir",
+        "review_format_dir",
+        "review_methodology_path",
+        "review_format_path",
+        "review_methodology_weights",
+    ):
+        assert not hasattr(config, removed)
 
 
 def test_load_config_reads_custom_github_repo(tmp_path):
     cfg = tmp_path / CONFIG_FILENAME
-    cfg.write_text(
-        'github_repo = "https://github.com/example/repo"\n'
-    )
+    cfg.write_text('github_repo = "https://github.com/example/repo"\n')
     config = load_config(str(cfg))
     assert config.github_repo == "https://github.com/example/repo"
 
 
-def test_initial_prompt_template_has_owner_placeholders():
-    """DEFAULT_INITIAL_PROMPT must contain format placeholders for owner credentials."""
-    assert "{owner_email}" in DEFAULT_INITIAL_PROMPT
-    assert "{owner_name}" in DEFAULT_INITIAL_PROMPT
-    assert "{owner_password}" in DEFAULT_INITIAL_PROMPT
-
-
-def test_initial_prompt_template_has_github_repo_placeholder():
-    assert "{github_repo}" in DEFAULT_INITIAL_PROMPT
+def test_initial_prompt_template_has_koala_base_url_placeholder():
+    assert "{koala_base_url}" in DEFAULT_INITIAL_PROMPT
 
 
 def test_initial_prompt_template_renders_without_error():
     rendered = DEFAULT_INITIAL_PROMPT.format(
-        owner_email="test@test.com",
-        owner_name="tester",
-        owner_password="pw123",
-        github_repo="https://github.com/example/repo",
         koala_base_url="https://koala.science",
     )
-    assert "test@test.com" in rendered
-    assert "tester" in rendered
-    assert "pw123" in rendered
-    assert "https://github.com/example/repo" in rendered
-    # Placeholders must be gone
-    assert "{owner_email}" not in rendered
-    assert "{owner_name}" not in rendered
-    assert "{owner_password}" not in rendered
-    assert "{github_repo}" not in rendered
+    # Placeholder must be gone
     assert "{koala_base_url}" not in rendered
+    assert "https://koala.science" in rendered
 
 
 def test_initial_prompt_mentions_koala_science():
-    # Unformatted template should reference the Koala brand and carry the
-    # templated base URL placeholder rather than a hardcoded host.
     assert "Koala Science" in DEFAULT_INITIAL_PROMPT
-    assert "{koala_base_url}" in DEFAULT_INITIAL_PROMPT
-    # When rendered with the default base URL the resolved host appears.
     rendered = DEFAULT_INITIAL_PROMPT.format(
-        owner_email="test@test.com",
-        owner_name="tester",
-        owner_password="pw123",
-        github_repo="https://github.com/example/repo",
         koala_base_url="https://koala.science",
     )
     assert "https://koala.science" in rendered
@@ -243,14 +218,9 @@ def test_initial_prompt_mentions_koala_science():
 
 def test_initial_prompt_renders_with_staging_base_url():
     rendered = DEFAULT_INITIAL_PROMPT.format(
-        owner_email="test@test.com",
-        owner_name="tester",
-        owner_password="pw123",
-        github_repo="https://github.com/example/repo",
         koala_base_url="https://staging.koala.science",
     )
     assert "https://staging.koala.science" in rendered
-    # The bare prod host must not appear when rendered with staging.
     assert "https://koala.science/" not in rendered
     assert "https://koala.science\n" not in rendered
     assert "https://koala.science " not in rendered

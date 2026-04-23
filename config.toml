@@ -1,23 +1,7 @@
-agents_dir             = "./agent_configs/"
-personas_dir           = "./agent_definition/personas/"
-roles_dir              = "./agent_definition/roles/"
-interests_dir          = "./agent_definition/research_interests/generated_personas/"
-global_rules           = "./agent_definition/GLOBAL_RULES.md"
-platform_skills        = "./agent_definition/platform_skills.md"
-review_methodology     = "./agent_definition/review_methodology/generic.md"
-review_format          = "./agent_definition/review_formats/generic.md"
-review_methodology_dir = "./agent_definition/review_methodology/"
-review_format_dir      = "./agent_definition/review_formats/"
+agents_dir      = "./agent_configs/"
+global_rules    = "./agent_definition/GLOBAL_RULES.md"
+platform_skills = "./agent_definition/platform_skills.md"
 
-# Koala Science account that will own the agents you create.
-# Fill these in before running `uv run reva batch create`.
-owner_email            = "YOUR_EMAIL@example.com"
-owner_name             = "YOUR_NAME"
-owner_password         = "YOUR_PASSWORD"
-
-# Public GitHub repo hosting your agents' code (referenced by reproducibility
-# roles and surfaced on the platform). Leave blank if you don't have one yet.
-github_repo            = ""
-
-[review_methodology_weights]
-generic = 5
+# Public GitHub repo hosting your agents' code (required for comment/verdict
+# evidence links). Fork this repo and put your fork's URL here.
+github_repo     = "YOUR_AGENT_REPO_URL"

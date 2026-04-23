@@ -23,51 +23,26 @@ CONFIG_FILENAME = "config.toml"
 
 DEFAULT_CONFIG = {
     "agents_dir": "./agents/",
-    "personas_dir": "./personas/",
-    "roles_dir": "./roles/",
-    "interests_dir": "./interests/",
-    "review_methodology_dir": "./review_methodology/",
-    "review_format_dir": "./review_formats/",
     "global_rules": "./GLOBAL_RULES.md",
     "platform_skills": "./platform_skills.md",
-    "review_methodology": "",
-    "review_format": "",
-    "owner_email": "reva@agents.local",
-    "owner_name": "reva",
-    "owner_password": "reva-owner-2026",
     "github_repo": "",
 }
 
 DEFAULT_INITIAL_PROMPT = (
     "You are an agent on the Koala Science platform participating in the ICML 2026 "
-    "Agent Review Competition. Your role, research interests, and persona are described "
-    "in your instructions.\n\n"
-    "IMPORTANT — Identity and authentication:\n"
-    "1. Read `.agent_name` to get your platform username.\n"
-    "2. Check if `.api_key` exists. If it does, use it to authenticate (call "
-    "{koala_base_url}/api/v1/users/me to verify). Do NOT register again — you are "
-    "already registered.\n"
-    "3. If `.api_key` does NOT exist, register as follows:\n"
-    "   a. Read {koala_base_url}/skill.md for API details.\n"
-    "   b. Try POST {koala_base_url}/api/v1/auth/agents/register with:\n"
-    '      {{"name": "<your .agent_name>", "owner_email": "{owner_email}", '
-    '"owner_name": "{owner_name}", "owner_password": "{owner_password}", '
-    '"github_repo": "{github_repo}"}}\n'
-    "   c. If that fails (HTTP 409 or email-already-exists error), the owner account "
-    "already exists. In that case:\n"
-    '      - POST /api/v1/auth/login with {{"email": "{owner_email}", "password": "{owner_password}"}} '
-    "to get an owner token.\n"
-    "      - Use the owner token to register this agent under the existing owner "
-    "(see skill.md for the current endpoint).\n"
-    "   d. Save the returned API key to `.api_key` immediately. The API key is passed "
-    "as a Bearer token in the Authorization header on every subsequent request.\n\n"
+    "Agent Review Competition. Your reviewing focus and style are described in your "
+    "instructions.\n\n"
+    "Your API key is at `.api_key` in this directory — the owner provisioned it. Use "
+    "it as `Authorization: Bearer <key>` on every Koala Science request (see "
+    "{koala_base_url}/skill.md for endpoint details). If `.api_key` is missing, stop: "
+    "the owner has not provisioned you yet.\n\n"
     "TRANSPARENCY WORKFLOW (required on every comment and verdict):\n"
     "Every POST that creates a comment or verdict MUST include a `github_file_url` "
     "pointing to a file in your agent repo that documents your reasoning and evidence. "
     "Before posting:\n"
     "  a. Write a markdown file in your working directory documenting the reasoning for "
     "this specific comment/verdict (e.g., `review_<paper_id>_<timestamp>.md`).\n"
-    "  b. Commit and push it to the GitHub repo: {github_repo}\n"
+    "  b. Commit and push it to your agent's GitHub repo.\n"
     "  c. Construct the GitHub URL for the file "
     "(e.g., https://github.com/<owner>/<repo>/blob/main/<path>) and pass it as "
     '`"github_file_url"` in the POST body.\n\n'
@@ -85,8 +60,7 @@ DEFAULT_INITIAL_PROMPT = (
     "COMMENT_ON_PAPER, PAPER_DELIBERATING, and PAPER_REVIEWED. Respond to what deserves "
     "a reply, then mark notifications read.\n\n"
     "Then continue your reviewing work: browse papers, read, comment, cite others, and "
-    "submit verdicts when papers enter their verdict window. Never re-register if you "
-    "already have a valid API key."
+    "submit verdicts when papers enter their verdict window."
 )
 
 
@@ -96,19 +70,8 @@ class RevaConfig:
 
     project_root: Path
     agents_dir: Path
-    personas_dir: Path
-    roles_dir: Path
-    interests_dir: Path
-    review_methodology_dir: Path
-    review_format_dir: Path
     global_rules_path: Path
     platform_skills_path: Path
-    review_methodology_path: Path | None = None
-    review_format_path: Path | None = None
-    review_methodology_weights: dict[str, int] = field(default_factory=dict)
-    owner_email: str = "reva@agents.local"
-    owner_name: str = "reva"
-    owner_password: str = "reva-owner-2026"
     github_repo: str = ""
     koala_base_url: str = field(default_factory=koala_base_url)
 
@@ -128,26 +91,22 @@ def _walk_up(start: Path) -> Path | None:
 
 def find_config(explicit: str | None = None) -> Path | None:
     """Find config.toml using the resolution order."""
-    # 1. explicit --config flag
     if explicit:
         p = Path(explicit)
         if p.is_file():
             return p
         return None
 
-    # 2. REVA_CONFIG env var
     env = os.environ.get("REVA_CONFIG")
     if env:
         p = Path(env)
         if p.is_file():
             return p
 
-    # 3. walk up from cwd
     found = _walk_up(Path.cwd())
     if found:
         return found
 
-    # 4. global default
     global_default = Path.home() / ".reva" / CONFIG_FILENAME
     if global_default.is_file():
         return global_default
@@ -169,26 +128,11 @@ def load_config(explicit: str | None = None) -> RevaConfig:
 
     merged = {**DEFAULT_CONFIG, **raw}
 
-    def _optional(key: str) -> Path | None:
-        val = merged.get(key, "")
-        return (project_root / val).resolve() if val else None
-
     return RevaConfig(
         project_root=project_root,
         agents_dir=(project_root / merged["agents_dir"]).resolve(),
-        personas_dir=(project_root / merged["personas_dir"]).resolve(),
-        roles_dir=(project_root / merged["roles_dir"]).resolve(),
-        interests_dir=(project_root / merged["interests_dir"]).resolve(),
-        review_methodology_dir=(project_root / merged["review_methodology_dir"]).resolve(),
-        review_format_dir=(project_root / merged["review_format_dir"]).resolve(),
         global_rules_path=(project_root / merged["global_rules"]).resolve(),
         platform_skills_path=(project_root / merged["platform_skills"]).resolve(),
-        review_methodology_path=_optional("review_methodology"),
-        review_format_path=_optional("review_format"),
-        review_methodology_weights={str(k): int(v) for k, v in raw.get("review_methodology_weights", {}).items()},
-        owner_email=merged["owner_email"],
-        owner_name=merged["owner_name"],
-        owner_password=merged["owner_password"],
         github_repo=merged["github_repo"],
         koala_base_url=koala_base_url(),
     )

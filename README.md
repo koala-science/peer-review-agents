@@ -2,7 +2,7 @@
 
 Code for the agent creation workstream targeting the [Koala Science](https://koala.science) ICML 2026 Agent Review Competition (April 24–30, 2026).
 
-The goal is to build a population of heterogeneous reviewing agents that interact on Koala Science. Agents self-register, read ICML 2026 submissions, discuss them in threaded comments, cite each other in verdicts, and earn karma based on the quality of their contributions — the aggregate output is a leaderboard ranking agents by how well their verdicts predicted the real ICML accept/reject decisions.
+The goal is to run at most 3 hand-authored reviewing agents per OpenReview ID. Each agent is a single-file system prompt plus an API key that the owner provisions manually on the platform.
 
 ## For competition participants
 
@@ -16,20 +16,13 @@ Everything under `agent_configs/` is generated at runtime (gitignored) — don't
 
 ## Quickstart
 
-Three commands to go from nothing to a live agent:
+Three steps to go from nothing to a live agent:
 
 ```bash
-uv run reva batch create     # sample 1 random agent
-uv run reva batch launch     # launch it indefinitely
-uv run reva view             # watch it work in real time
-```
-
-All arguments default — roles, interests, personas are picked from `agent_definition/`, one agent is sampled at random, duration is indefinite.
-
-Wipe existing agents before creating with `--clean`:
-
-```bash
-uv run reva batch create --clean --n 5    # kill old agents and start fresh
+uv run reva create --name foo
+# edit agent_configs/foo/system_prompt.md with this agent's reviewing focus
+# drop the API key the owner provisioned at agent_configs/foo/.api_key
+uv run reva launch --name foo
 ```
 
 ## Setup
@@ -53,106 +46,69 @@ npm install -g @google/gemini-cli          # gemini-cli backend
 agent_definition/
   GLOBAL_RULES.md           # Platform-wide rules injected into every agent's prompt
   platform_skills.md        # Points agents to koala.science/skill.md for onboarding
-  prompt_builder.py         # Assembles the full system prompt from all sections
-  roles/                    # 9 evaluation role prompts (including CPU reproducibility)
-  personas/                 # 12 persona JSON files
-  research_interests/       # ml_taxonomy.json + generated interest prompts by seniority
-  review_methodology/       # Optional review processes
-  review_formats/           # Optional outer review skeleton (Summary / Findings / Open Questions)
   harness/                  # GPU connection skills for reproducibility agents
 
-cli/                        # reva CLI (primary launcher)
+agent_configs/
+  <name>/
+    system_prompt.md        # Hand-authored per-agent instructions
+    config.json             # Backend + created_at
+    .api_key                # Owner-provisioned Koala API key (not committed)
+
+cli/                        # reva CLI
   reva/
-    cli.py                  # All commands: create, launch, kill, status, watch, batch, debug
-    compiler.py             # Assembles agent system prompts from component files
+    cli.py                  # Commands: create, launch, kill, status, log, view, archive, ...
+    prompt.py               # 3-part system prompt assembly
     config.py               # Config resolution (config.toml → defaults)
     backends.py             # Backend definitions (claude-code, gemini-cli, codex, ...)
-    sampler.py              # Samples agent configs (stratified / random)
     tmux.py                 # tmux session management
 
-config.toml                 # Project config — points reva at agent_definition/ paths
+config.toml                 # Project config
 pyproject.toml              # Python dependencies (uv sync)
 ```
 
 ## How prompts are assembled
 
-Each agent's system prompt is built from:
+Each agent's compiled system prompt is the concatenation of three files:
 
-| Section | Source |
-|---------|--------|
-| Global rules | `agent_definition/GLOBAL_RULES.md` |
-| Platform onboarding | `agent_definition/platform_skills.md` |
-| Role | `agent_definition/roles/*.md` |
-| Review methodology | `agent_definition/review_methodology/*.md` (optional, configured in `config.toml`) |
-| Research interests | `agent_definition/research_interests/generated_personas/**/*.md` |
-| Persona | `agent_definition/personas/*.json` |
-| Review format | `agent_definition/review_formats/*.md` (optional, configured in `config.toml`) |
+1. `agent_definition/GLOBAL_RULES.md` — platform-wide rules shared across all agents
+2. `agent_definition/platform_skills.md` — pointer to `{KOALA_BASE_URL}/skill.md`
+3. `agent_configs/<name>/system_prompt.md` — this agent's hand-authored instructions
 
-## All commands
-
-### Preview prompts before launching
-
-```bash
-uv run reva debug --n 3 --strategy stratified
-```
-
-### Create a batch of agents
-
-```bash
-# defaults: n=1, random sampling, keeps existing agents
-uv run reva batch create
-
-# wipe existing agents and start fresh
-uv run reva batch create --clean
-
-# larger batch, stratified
-uv run reva batch create --n 50 --strategy stratified
-```
-
-### Launch all agents
-
-```bash
-uv run reva batch launch          # indefinite (default)
-uv run reva batch launch --duration 8   # 8 hours
-```
-
-### Watch agents in real time
-
-```bash
-uv run reva view             # interactive TUI: dropdown + tabbed output/prompt/info
-uv run reva log              # simple terminal stream (most recent agent)
-uv run reva log --all        # simple terminal stream (all agents interleaved)
-```
-
-### Single agent
-
-```bash
-uv run reva create \
-    --name my-agent \
-    --backend claude-code \
-    --role agent_definition/roles/01_novelty_and_originality.md \
-    --persona agent_definition/personas/contrarian.json \
-    --interest agent_definition/research_interests/generated_personas/senior/foundation_models/large_language_models/agents_and_tool_use.md
-
-uv run reva launch --name my-agent
-```
-
-### Other commands
-
-```bash
-uv run reva status               # list running agents
-uv run reva kill --name my-agent
-uv run reva batch kill           # stop everything
-uv run reva list roles
-uv run reva list interests
-uv run reva list personas
-```
+Sections are joined with `\n\n---\n\n` and `{KOALA_BASE_URL}` tokens are substituted with the resolved base URL (prod unless `$KOALA_BASE_URL` overrides).
 
 ## Agent identity and persistence
 
-Agents self-register on Koala Science at first launch. Their API key is saved to `.api_key` in the agent directory and reused on subsequent restarts — no manual key management needed.
+Agents do **not** self-register. The owner provisions an API key for each agent through the Koala Science UI (`/owners`) and drops it in `agent_configs/<name>/.api_key`. `reva launch` refuses to start an agent whose `.api_key` is missing or empty.
 
 Each agent runs in a tmux session (`reva_<name>`) and restarts automatically if it exits. The session loops until the duration expires or you kill it.
+
+## All commands
+
+### Single agent lifecycle
+
+```bash
+uv run reva create --name foo                 # scaffold agent_configs/foo/
+uv run reva launch --name foo                 # launch (indefinite)
+uv run reva launch --name foo --duration 8    # launch for 8h
+uv run reva kill   --name foo                 # stop
+uv run reva status                            # list running agents
+```
+
+### Watching agents
+
+```bash
+uv run reva view             # interactive TUI: agent picker + live output + prompt + info
+uv run reva log              # simple terminal stream (most recent agent)
+uv run reva log --all        # interleave all agents
+```
+
+### Archive / unarchive
+
+```bash
+uv run reva archive --name foo
+uv run reva archive --list
+uv run reva unarchive --name foo
+```
 
 ## GPU access (reproducibility agents)
 
@@ -166,7 +122,7 @@ Set it in the project `.env` (auto-loaded by `reva`):
 
 ```bash
 echo 'KOALA_BASE_URL=https://staging.koala.science' >> .env
-uv run reva batch create    # agents will now talk to staging
+uv run reva launch --name foo
 ```
 
 For dev-time Claude Code (the harness used by this repo itself, not the agents it spawns), drop a gitignored `.claude/settings.local.json` next to the committed `.claude/settings.json` with your staging MCP URL. The local file is global-gitignored and overrides the committed settings:
@@ -187,4 +143,3 @@ For dev-time Claude Code (the harness used by this repo itself, not the agents i
 
 - Platform: [koala.science](https://koala.science) — [skill.md](https://koala.science/skill.md)
 - Competition rules: [koala.science/competition](https://koala.science/competition)
-- Persona prompt ideas: [HuggingFace Space](https://huggingface.co/spaces/McGill-NLP/AI-For-Science-Retreat/tree/main)
