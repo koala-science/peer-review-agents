@@ -1,23 +1,22 @@
-# Reasoning for Citation Audit - Paper b044e3c3 (EEG Transformer)
+# Reasoning for Reference Check - Paper b044e3c3
 
-## Overview
-I performed a systematic audit of the bibliography (`REFERENCES.bib`) for the paper "A Unified SPD Token Transformer Framework for EEG Classification: Systematic Comparison of Geometric Embeddings". The audit focused on metadata completeness and BibTeX casing accuracy.
+I performed a systematic review of the bibliography and formatting for the paper "A Unified SPD Token Transformer Framework for EEG Classification: Systematic Comparison of Geometric Embeddings" (ID: b044e3c3-4a8e-4a74-a3b8-13584deba079).
 
 ## Findings
 
-### 1. BibTeX Casing and Bracing
-The ICML bibliography style (`icml2026.bst`) enforces sentence case for titles. Several proper nouns and technical terms are not protected by braces `{}` and will thus be incorrectly lowercased in the rendered PDF:
-- `Riemannian` in `barachant2012classification` and `barachant2013multiclass` will become "riemannian".
-- `Log-Euclidean` in `arsigny2006log` will become "log-euclidean".
-- `Kakutani's theorem` in `bures1969extension` will become "kakutani's theorem".
+### 1. Significant Attribution and Metadata Error
+The entry for **FBCNet** (`ingolfsson2021fbconet`) contains a major error. It attributes the paper to *Ingolfsson et al.* and lists it as a 2021 IEEE SMC conference paper. However, **FBCNet** was actually authored by **Ravikiran Mane et al.** and is primarily cited as an **arXiv preprint (2104.01233)**. It appears the metadata from the `ingolfsson2020eegtcnet` entry was incorrectly duplicated.
 
-It is noted that the authors have correctly braced some acronyms like `{LMDA-Net}`, `{SPD}`, and `{EEG}` in other entries, so these specific omissions appear to be inconsistencies.
+### 2. Outdated Publication Details
+- **ManifoldNet** (`chakraborty2020manifoldnet`) was formally published in **IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)** in **2022** (Volume 44, Issue 2). The current bib entry lists it as "Published online 2020".
 
-### 2. Missing Metadata
-- `vaswani2017attention` (Attention is All You Need): The entry is missing page numbers (which are 5998--6008 for NeurIPS 2017).
+### 3. Missing Capitalization Protection in BibTeX
+Many domain-specific acronyms in titles are missing curly brace protection `{}`. This will cause them to be rendered in lowercase by many bibliography styles, which is incorrect for technical terms.
+- Impacted terms: `SPD`, `EEG`, `BCI`, `MAtt`, `LMDA-Net`, `MAMEM`, `DPR`, `FBCNet`, `EEG-TCNet`, `SPDNet`, `DeepKSPD`, `ManifoldNet`.
 
-### 3. Key-Year Discrepancy
-- `barachant2013multiclass`: The citation key includes "2013" but the `year` field is "2012". While minor, this can lead to confusion in reference management.
+### 4. Minor Inconsistencies
+- The entry `barachant2013multiclass` has the key `2013` but the `year` field is `2012`. While it may have been published online in 2011/2012, the key mismatch is slightly confusing.
+- Conference names like `Proceedings of the AAAI Conference on Artificial Intelligence` and `Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition` are used correctly, but standardizing the use of "IEEE/CVF" for CVPR and other similar details would improve consistency.
 
-## Conclusion
-The bibliography is of high quality and covers both foundational and very recent (2025) works. Minor curation to protect proper nouns with braces and complete the metadata for foundational works would further enhance the scholarly rigor of the submission.
+## Evidence
+The findings were verified by cross-referencing `REFERENCES.bib` with the IEEE Xplore Digital Library, Google Scholar, and arXiv as of April 2026.
