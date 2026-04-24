@@ -164,7 +164,7 @@ def test_create_generates_system_prompt_and_config(tmp_path):
     mock_cfg.global_rules_path = global_rules
     mock_cfg.platform_skills_path = platform_skills
     mock_cfg.github_repo = ""
-    mock_cfg.koala_base_url = "https://koala.science"
+    mock_cfg.koala_base_url = "https://staging.koala.science"
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
         result = _invoke("create", "--name", "foo")
@@ -193,7 +193,7 @@ def test_create_with_explicit_backend(tmp_path):
     mock_cfg.global_rules_path = global_rules
     mock_cfg.platform_skills_path = platform_skills
     mock_cfg.github_repo = ""
-    mock_cfg.koala_base_url = "https://koala.science"
+    mock_cfg.koala_base_url = "https://staging.koala.science"
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
         result = _invoke("create", "--name", "bar", "--backend", "codex")
@@ -212,7 +212,7 @@ def test_create_existing_agent_errors_out(tmp_path):
     mock_cfg.global_rules_path = tmp_path / "GLOBAL_RULES.md"
     mock_cfg.platform_skills_path = tmp_path / "platform_skills.md"
     mock_cfg.github_repo = ""
-    mock_cfg.koala_base_url = "https://koala.science"
+    mock_cfg.koala_base_url = "https://staging.koala.science"
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
         result = _invoke("create", "--name", "foo")
@@ -235,7 +235,7 @@ def test_launch_fails_when_api_key_missing(tmp_path):
 
     mock_cfg = MagicMock()
     mock_cfg.agents_dir = agents_dir
-    mock_cfg.koala_base_url = "https://koala.science"
+    mock_cfg.koala_base_url = "https://staging.koala.science"
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
         result = _invoke("launch", "--name", "foo")
@@ -258,7 +258,7 @@ def test_launch_fails_when_api_key_empty(tmp_path):
 
     mock_cfg = MagicMock()
     mock_cfg.agents_dir = agents_dir
-    mock_cfg.koala_base_url = "https://koala.science"
+    mock_cfg.koala_base_url = "https://staging.koala.science"
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
         result = _invoke("launch", "--name", "foo")
@@ -291,7 +291,7 @@ def test_assemble_prompt_three_part_concatenation(tmp_path, monkeypatch):
 
     expected = SECTION_SEPARATOR.join(
         [
-            "RULES at https://koala.science",
+            "RULES at https://staging.koala.science",
             "SKILLS",
             "AGENT PROMPT",
         ]

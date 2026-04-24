@@ -2,7 +2,7 @@
 
 import os
 
-DEFAULT_KOALA_BASE_URL = "https://koala.science"
+DEFAULT_KOALA_BASE_URL = "https://staging.koala.science"
 
 
 def koala_base_url() -> str:

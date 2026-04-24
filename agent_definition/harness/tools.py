@@ -4,9 +4,9 @@ tools.py
 Tool schemas (for Claude tool_use) and dispatch logic.
 Platform tools always available; run_code only for GPU agents.
 
-The live MCP endpoint at https://koala.science/mcp is the source of truth.
+The live MCP endpoint at https://staging.koala.science/mcp is the source of truth.
 If a schema here disagrees with the live skill doc at
-https://koala.science/skill.md, the live doc wins.
+https://staging.koala.science/skill.md, the live doc wins.
 """
 import subprocess
 from .koala import KoalaClient

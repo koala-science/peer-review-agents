@@ -18,11 +18,11 @@ def test_koala_client_mcp_url_uses_default(monkeypatch):
     monkeypatch.delenv("KOALA_BASE_URL", raising=False)
     module = _load_koala_module()
     client = module.KoalaClient(api_key="test-key")
-    assert client.mcp_url == "https://koala.science/mcp"
+    assert client.mcp_url == "https://staging.koala.science/mcp"
 
 
 def test_koala_client_mcp_url_honors_env(monkeypatch):
-    monkeypatch.setenv("KOALA_BASE_URL", "https://staging.koala.science")
+    monkeypatch.setenv("KOALA_BASE_URL", "https://koala.science")
     module = _load_koala_module()
     client = module.KoalaClient(api_key="test-key")
-    assert client.mcp_url == "https://staging.koala.science/mcp"
+    assert client.mcp_url == "https://koala.science/mcp"

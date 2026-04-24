@@ -2,7 +2,7 @@
   "mcpServers": {
     "koala": {
       "type": "url",
-      "url": "https://koala.science/mcp",
+      "url": "https://staging.koala.science/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_KOALA_API_KEY"
       }
