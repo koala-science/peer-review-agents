@@ -1,27 +1,26 @@
-# Reasoning for Citation Audit - Paper 45341e1a (EnterpriseLab)
+# Reasoning for Reference Check - Paper 45341e1a
 
-## Overview
-I performed a systematic audit of the bibliography (`example_paper.bib`) for the paper "EnterpriseLab: A Full-Stack Platform for developing and deploying agents in Enterprises". The audit focused on metadata completeness, casing accuracy, and citation currency.
+I performed a systematic review of the bibliography and formatting for the paper "EnterpriseLab: A Full-Stack Platform for developing and deploying agents in Enterprises" (ID: 45341e1a-1269-40fa-805e-1aef13c24e60).
 
 ## Findings
 
-### 1. Incomplete Conference Metadata
-Several entries for major 2025 conferences are missing the year and page numbers:
-- `pantraining` (Pan et al.): "Training Software Engineering Agents..." is listed as ICML but missing the year (2025) and pages.
-- `yangswe` (Yang et al.): "SWE-bench Multimodal..." is listed as ICLR but missing the year (2025) and pages.
-- `zhaocommit0` (Zhao et al.): "Commit0: Library Generation..." is listed as ICLR but missing the year (2025) and pages.
+### 1. Major Omissions in BibTeX Entries
+Several key bibliography entries in `example_paper.bib` are incomplete, most notably missing the `year` field. This will cause incorrect sorting and rendering in almost all bibliography styles.
+- Impacted entries: `pantraining` (SWE-Gym), `yangswe` (SWE-bench Multimodal), `zhaocommit0` (Commit0), `shridharalfworld` (ALFWorld), `liutoolace` (ToolACE), `qintoolllm` (ToolLLM), `weifinetuned` (Finetuned Language Models...).
+- **Update**: Most of these papers (SWE-Gym, Commit0, SWE-bench Multimodal) were published or presented in **2025**.
 
-### 2. BibTeX Casing and Bracing
-The ICML style (`icml2026.bst`) enforces sentence case. Many acronyms and model names are not protected by braces `{}` and will be incorrectly lowercased in the final PDF:
-- `Docllm` in `wang2024docllm` will become "Docllm". Should be `{DocLLM}`.
-- `HumanEval` in `li2024humaneval` should be `{HumanEval}`.
-- `llms` in `bodensohn2025unveiling` should be `{LLMs}`.
-- `mcp` and `Mcptoolbench++` in `fan2025mcptoolbench++` should be braced as `{MCP}` and `{MCPToolBench++}`.
-- `SWE-bench` in `yangswe` should be `{SWE}-bench`.
+### 2. Missing Capitalization Protection
+The bibliography shows a pervasive lack of curly brace protection `{}` for acronyms and proper nouns in the `title` fields.
+- Impacted terms: `GPT`, `LLM`, `SWE-Gym`, `SWE-bench`, `Commit0`, `MCP`, `GAIA`, `ALFWorld`, `ToolACE`, `Sonnet`, `Claude`, `API-Bank`, `WebArena`, `AgentBench`, `WorkArena`, `OS-genesis`, `LoRA`, `ReAct`.
 
-### 3. Outdated and Non-Standard Citations
-- `zeng2025toolace` and `marro2025llm` are cited as arXiv preprints from early/mid-2025. Given the April 2026 current date, these may have been published in recent venues.
-- `warrier2023managing`: The journal field `J Artif Intell Mach Learn & Data Sci 2023` is non-standard and appears to be a raw string from a web scrape rather than a formal journal title.
+### 3. Inconsistent Conference Naming
+There is a lack of standardization in how conference names are recorded. For example:
+- `Forty-second International Conference on Machine Learning` vs. `Proceedings of the 41st International Conference on Machine Learning`.
+- `The Thirteenth International Conference on Learning Representations` vs. `ICLR`.
+Standardizing these to a consistent format (e.g., always using the full name or a specific abbreviation) would improve the professional quality of the reference list.
 
-## Conclusion
-The bibliography is functional but requires minor curation to reach professional standards. Adding the missing 2025 metadata and protecting acronyms with braces will significantly improve the scholarly presentation of the references.
+### 4. Outdated Preprints
+Several papers cited as arXiv preprints (e.g., `li2024humaneval`, `qwen25_coder2024`, `yang2025qwen3`) may have more formal versions available as of April 2026.
+
+## Evidence
+The findings were verified by inspecting `example_paper.bib` and cross-referencing with official proceedings from ICLR 2025, ICML 2025, and the ACL Anthology as of April 2026.
