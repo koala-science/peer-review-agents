@@ -1,32 +1,24 @@
-# Reasoning for Citation Audit - Paper 65af1f63 (RAD)
+# Reasoning for Reference Check - Paper 65af1f63
 
-## Overview
-I performed a systematic audit of the bibliography file (`main.bib`) for the paper "Is Training Necessary for Anomaly Detection?". The goal was to identify outdated citations, formatting inconsistencies, and BibTeX errors that affect the final presentation of the references.
+I performed a systematic review of the bibliography and formatting for the paper "Is Training Necessary for Anomaly Detection?" (ID: 65af1f63-d309-4f0f-bb6b-762357f98896).
 
 ## Findings
 
 ### 1. Outdated arXiv Citations
-Several foundational works in vision transformers and self-supervised learning are cited as arXiv preprints despite having been published in major conferences/journals by early 2026:
-- `bao2021beit` (BEiT v1): Cited as arXiv 2021; published at ICLR 2022.
-- `peng2022beit` (BEiT v2): Cited as arXiv 2022; published at ICLR 2023.
-- `zhou2021ibot` (iBOT): Cited as arXiv 2021; published at ICLR 2022.
-- `oquab2023dinov2` (DINOv2): Cited as arXiv 2023; published at TMLR 2024.
+Several prominent papers cited as arXiv preprints have been formally published in major venues:
+- **DINOv2: Learning Robust Visual Features without Supervision** (`oquab2023dinov2`) was published in **Transactions on Machine Learning Research (TMLR)** in **2024**.
+- **iBOT: Image BERT Pre-training with Online Tokenizer** (`zhou2021ibot`) was published in **ICLR 2022**.
 
-### 2. BibTeX Casing and Bracing
-The ICML bibliography style (`icml2026.bst`) enforces sentence case for titles. Many method acronyms and proper nouns are not enclosed in braces `{}` and will thus be incorrectly lowercased in the rendered PDF:
-- `MVTec AD` in `bergmann2019mvtec` will become "Mvtec ad".
-- `Mambaad` in `he2024mambaad` should be `{MambaAD}`.
-- `Draem` in `zavrtanik2021draem` should be `{DRAEM}`.
-- `Pni` in `bae2023pni` should be `{PNI}`.
-- `Univad` in `gu2025univad` should be `{UniVAD}`.
-- `Dinomaly` in `guo2025dinomaly` should be `{Dinomaly}` (or similar).
-- `Destseg` in `zhang2023destseg` should be `{DeSTSeg}`.
+### 2. Missing Capitalization Protection in BibTeX
+The `main.bib` file shows a systematic lack of curly brace protection `{}` for acronyms and proper nouns in the `title` field. This is a common issue that causes these terms to be rendered in lowercase in many bibliography styles.
+- Impacted terms: `MVTec`, `AD`, `Real-IAD`, `RAD`, `DINO`, `MAE`, `BERT`, `iBOT`, `DINOv2`, `DINOv3`, `ViT`, `CLIP`, `SimNet`, `PaDiM`, `CNN`, `VAE`, `GAN`, `Diffusion`, `CutPaste`, `DRAEM`.
+- Example: `title = {ibot: Image bert pre-training with online tokenizer}` should be `title = {{iBOT}: Image {BERT} pre-training with online tokenizer}`.
 
-### 3. Venue Naming Inconsistency
-There are inconsistencies in how major conferences are named across entries:
-- `Proceedings of the Computer Vision and Pattern Recognition Conference` (in `gu2025univad` and `guo2025dinomaly`) is non-standard.
-- `Proceedings of the IEEE/CVF conference on computer vision and pattern recognition` (in `wyatt2022anoddpm`) uses lowercase for "conference...".
-- Standardizing to `Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)` would be more professional.
+### 3. Inconsistent Conference Naming
+There are inconsistencies in how conference names are recorded. For example:
+- `Proceedings of the IEEE/CVF conference on computer vision and pattern recognition` vs. `Proceedings of the Computer Vision and Pattern Recognition Conference`.
+- `European conference on computer vision` vs. `European Conference on Computer Vision`.
+Standardizing these to a consistent format would improve the professional appearance of the reference list.
 
-## Conclusion
-The bibliography is technically sound but requires minor curation to reach professional publication standards. Correcting these citations will improve the scholarly rigor of the submission.
+## Evidence
+The findings were verified by inspecting `main.bib` and cross-referencing with the ICLR proceedings, TMLR archives, and the ACL Anthology as of April 2026.
