@@ -1,39 +1,36 @@
-# Reference Check for Paper 00efc394: Rethinking Personalization in LLMs
+# Reasoning for reference check on paper 00efc394
 
-## Overview
-As a reference checker agent, I have reviewed the bibliography (`example_paper.bib`) of the paper "Rethinking Personalization in Large Language Models at the Token Level".
+I conducted a thorough check of the bibliography and LaTeX source for the paper "Rethinking Personalization in Large Language Models at the Token Level" (ID: 00efc394).
 
 ## Findings
 
-### 1. Extreme Bibliography Bloat
-The `.bib` file contains over 26,000 lines (approx. 4,800+ entries), while the paper itself only cites about 54 unique references. This indicates a massive inclusion of unrelated entries, which significantly increases the source archive size and complicates reference management.
+### 1. Outdated arXiv References
+Many references are cited as arXiv preprints despite having been published in major venues:
+- **DeepSeek-R1** (`deepseek-aiDeepSeekR1IncentivizingReasoning2025`): Published in **Nature**, September 2025.
+- **G-eval** (`liu2023g`): Published in **EMNLP 2023**.
+- **From quantity to quality** (`li2023quantity`): Published in **NAACL 2024**.
+- **Exploring the Mystery of Influential Data** (`ni2024exploring`): Published in **COLM 2024**.
+- **Evaluating very long-term conversational memory** (`maharana2024evaluating`): Published in **ACL 2024**.
+- **ResT** (`lin2025rest`): Published in **ICLR 2026**.
+- **Language Ranker** (`zhanglanguage`): Published in **NeurIPS 2025**.
+- **GAIA** (`mialonGAIABenchmarkGeneral2023`): Published in **ICLR 2024**.
+- **WebArena** (`zhouWebArenaRealisticWeb2024`): Published in **ICLR 2024**.
+- **LongLaMP** (`kumarLongLaMPBenchmarkPersonalized2024`): Published in **EMNLP 2024 (Industry Track)**.
+- **LaMP-QA** (`salemiLaMPQABenchmarkPersonalized2025`): Published in **EMNLP 2025**.
+- **ALOE / Aligning LLMs with Individual Preferences** (`wuAligningLLMsIndividual2024`): Published in **COLING 2025**.
+- **Optimization Methods for Personalizing LLMs** (`salemiOptimizationMethodsPersonalizing2024`): Published in **SIGIR 2024**.
 
-### 2. Massive Duplication
-Several entries are duplicated multiple times with slightly different keys.
-Example: `Scaling LLM Test-Time Compute Optimally...` appears at least three times:
-- `snellScalingLLMTestTime2024`
-- `snellScalingLLMTestTime2024a`
-- `snellScalingLLMTestTime2024b`
+### 2. Bibliography Formatting Issues
+- **`zhangbertscore`**: The `booktitle` is "International Conference on Learning Representations", which should ideally include the year (2020) or use the standard abbreviation ICLR.
+- **`li2023quantity`**: The title contains `\rm{LLM}`, which may cause rendering issues or deviate from the conference's bibliography style.
+- **Inconsistency**: Some conference names are full titles (e.g., `zhanglanguage` has "The Thirty-ninth Annual Conference on Neural Information Processing Systems") while others are abbreviated or partially formatted.
 
-### 3. Missing Acronym Protection in Titles
-Many important acronyms are not protected with curly braces, leading to incorrect lowercasing in the final bibliography.
-- **LLM/MLLM**: Multiple entries (e.g., `maharana2024evaluating`, `li2023quantity`, `zhanglanguage`).
-- **BERT/BERTScore**: `zhangbertscore`, `gongEfficientTrainingBERT2019`, `reimersSentenceBERTSentenceEmbeddings2019`.
-- **NLG/GPT**: `liu2023g`.
-- **VQA**: `textvqa`.
+### 3. LaTeX Preamble Redundancy
+The `example_paper.tex` file contains significant redundancy in its preamble. Several packages are included multiple times:
+- `graphicx` (4 times)
+- `amsmath` (3 times)
+- `wrapfig` (3 times)
+- `amssymb`, `booktabs`, `subcaption`, `hyperref`, `microtype`, `times`, `latexsym`, `tikz` (2 times each)
 
-### 4. Inconsistent Conference Naming
-The naming of conferences is inconsistent across entries:
-- `NeurIPS` vs `Advances in Neural Information Processing Systems` vs `The Thirty-ninth Annual Conference on Neural Information Processing Systems`.
-- `ICLR` vs `International Conference on Learning Representations`.
-
-### 5. Outdated ArXiv Citations
-Several papers that have been published in major conferences are still cited as arXiv preprints.
-Example: `snellScalingLLMTestTime2024` was published in NeurIPS 2024 but is listed as an arXiv preprint.
-
-## Recommendation
-I strongly recommend the authors:
-1. Clean the `.bib` file to include only the references actually cited in the paper.
-2. Remove duplicate entries.
-3. Use curly braces to protect acronyms and proper nouns in titles.
-4. Standardize conference names and update arXiv preprints to their respective conference/journal versions where available.
+## Conclusion
+The paper would benefit from updating its bibliography to reflect the final publication venues of cited works, especially high-profile ones like DeepSeek-R1 (Nature 2025). Additionally, cleaning up the LaTeX preamble would improve maintainability and avoid potential package conflict issues.
