@@ -1,33 +1,41 @@
-# Bibliography Audit for "Self-Supervised Flow Matching for Scalable Multi-Modal Generative Modeling" (db3879d4)
+# Reasoning for Review - Paper db3879d4
 
-I have performed a systematic review of the bibliography (`example_paper.bib`) for this submission. While the paper demonstrates impressive multi-modal capabilities, the reference list contains significant technical issues that should be addressed to meet professional academic standards.
+## Overview
+The paper "Self-Supervised Flow Matching for Scalable Multi-Modal Synthesis" introduces a self-supervised flow matching paradigm (Self-Flow) to integrate representation learning within a generative framework. While the technical contribution is significant, the bibliography (`example_paper.bib`) is highly problematic and requires a major overhaul.
 
-## Technical Errors in BibTeX Source
+## Key Findings
 
-1.  **Duplicate `@String` Definitions**: The `example_paper.bib` file contains redundant `@String` blocks (e.g., `PAMI`, `CVPR`, `ICLR`, `NIPS`) defined twice with different expansions. This can lead to parsing warnings and inconsistencies in how conference names are rendered.
-2.  **Missing Capitalization Protection**: A large number of technical acronyms and proper nouns in titles lack curly brace `{}` protection. Under the ICML sentence-case style, these will be incorrectly lowercased (e.g., "dinov2", "llama", "mamba", "vae"). Affected terms include: **DINOv2**, **SiT**, **DiT**, **REPA**, **LDM**, **SD-DiT**, **SongBloom**, **ADM**, **VAE**, **MAR**, **VAR**, **MaskGIT**, **LlamaGen**, **MAGVIT-v2**, **MaskDiT**, **VQGAN**, **ViT**, **SimCLR**, **SDXL**, **TiTok**, **SD3**, **Sora**, **Lumina-T2X**, **RADIOv2.5**, **FeatSharp**, **SAM 2**, **VideoREPA**, and **JanusFlow**.
+### 1. Massive Duplication
+The bibliography contains numerous duplicate entries, often with different keys but pointing to the exact same paper:
+- **Instance Normalization**: `instancenorm` and `ulyanov2016instance` are identical.
+- **EQ-VAE**: `eqvae` and `evvae` (both ArXiv:2502.09509) are identical.
+- **ImageNet**: `imagenet` and `imgnet` (both CVPR 2009) are identical.
+- **Back to Basics**: `li2025back` and `jit` (both ArXiv:2511.13720) are identical.
+- **FeatSharp**: `ranzinger2025featsharp` and `ranzinger2025featsharpvisionmodelfeatures` are identical.
+- **VideoREPA**: `videorepa` and `zhang2025videorepa` (both ArXiv:2505.23656) are identical.
+- **Geometry Forcing**: `Wu2025GeometryFM` and `wu2025geometry` (both ArXiv:2507.07982) are identical.
 
-## Outdated arXiv Citations
+### 2. Outdated ArXiv Citations
+Many papers listed as ArXiv preprints have been formally published in major venues:
+- **Instance Normalization** (`instancenorm`): Published at **ICLR 2017**.
+- **REPA** (`repa`): Published at **ICLR 2025**.
+- **LlamaGen** (`llamagen`): Published at **ICLR 2025**.
+- **MAGVIT-v2** (`magvitv2`): Published at **ICLR 2024**.
+- **MaskDiT** (`maskdit`): Published at **CVPR 2024**.
+- **PixArt-alpha** (`pixart-alpha`): Published at **ICLR 2024**.
+- **Lumina-T2X** (`lumina`): Published at **ECCV 2024**.
+- **Diffusion Beats GANs on Classification** (`mu_disc`): Published at **CVPR 2024**.
+- **StyleGAN-T** (`stylegant`): Published at **SIGGRAPH 2023**.
 
-Several key works are cited as arXiv preprints despite having been formally published in major venues:
+### 3. Missing Capitalization Protection
+A pervasive issue across almost the entire bibliography is the lack of curly brace `{}` protection for technical acronyms and proper nouns in titles. This will result in incorrect lowercasing (sentence case) in many bibliography styles (like ICML). Impacted terms include:
+- **Model Names**: DINOv2, CLIP, DiT, REPA, Llama, MaskGIT, MAGVIT, VQ-VAE, VQGAN, ResNet, ViT, SDXL, TiTok, SD3, U-Net, EDM, DDPM, DDIM, Sora, FLUX.
+- **Optimization/Metrics**: Adam, AdamW, CFG, SiLU, CKA, LPIPS, FID.
+- **Datasets**: ImageNet, Open Images, FMA.
 
-1.  **REPA: Representation Alignment for Generation** (`repa`, 2024)
-    *   **Update to:** ICLR 2025 (International Conference on Learning Representations).
-2.  **Llama for Scalable Image Generation (LlamaGen)** (`llamagen`, 2024)
-    *   **Update to:** NeurIPS 2024 (Advances in Neural Information Processing Systems).
-3.  **Mamba: Linear-Time Sequence Modeling...** (`gu2023mamba`, 2023)
-    *   **Update to:** ICML 2024 (International Conference on Machine Learning).
-4.  **xLSTM: Extended Long Short-Term Memory** (`beck2024xlstm`, 2024)
-    *   **Update to:** NeurIPS 2024.
-5.  **FeatSharp: Your Vision Model Features, Sharper** (`ranzinger2025featsharp`, 2025)
-    *   **Update to:** ICML 2025.
-6.  **JanusFlow: Harmonizing autoregression and rectified flow...** (`ma2025janusflow`, 2025)
-    *   **Update to:** CVPR 2025 (Proceedings of the Computer Vision and Pattern Recognition Conference).
-7.  **DINOv2: Learning Robust Visual Features without Supervision** (`dinov2`, 2024)
-    *   **Update to:** TMLR 2024 (Transactions on Machine Learning Research).
+### 4. Formatting and Inconsistency
+- **Conference Naming**: There is significant inconsistency in how conferences are named (e.g., "Advances in neural information processing systems" vs "NeurIPS").
+- **Year Discrepancies**: Some entries have inconsistent years between their keys and the `year` field.
 
-## Recommendations
-
-*   **Consolidate `@String` definitions**: Remove redundant blocks at the beginning of the `.bib` file.
-*   **Protect Acronyms**: Use `{}` to preserve casing for all technical terms and model names.
-*   **Update Metadata**: Replace arXiv citations with their final conference or journal counterparts.
+## Conclusion
+The bibliography requires a thorough cleanup to remove duplicates, update preprints to their peer-reviewed versions, and ensure proper capitalization protection for technical terms. These improvements are essential for a professional and academically rigorous manuscript.
