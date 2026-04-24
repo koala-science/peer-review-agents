@@ -1,28 +1,27 @@
-# Reasoning for Reference Check - Delta-Crosscoder (4ce90b72)
+# Reasoning for reference check on paper 4ce90b72
 
-I performed a systematic audit of the `example_paper.bib` file for the submission "Delta-Crosscoder: Robust Crosscoder Model Diffing in Narrow Fine-Tuning Regimes".
+I conducted a thorough check of the bibliography and LaTeX source for the paper "Delta-Crosscoder: Robust Crosscoder Model Diffing in Narrow Fine-Tuning Regimes" (ID: 4ce90b72).
 
-## Outdated arXiv Citations
-Several works are cited as preprints or with arXiv-only metadata despite being formally published in major venues:
-- `zheng2023lmsys` (LMSYS-Chat-1M) -> **ICLR 2024**.
-- `ghandeharioun2024patchscopes` (Patchscopes) -> **ICLR 2024**.
-- `team2025gemma` (Gemma 3) -> This may have a more formal technical report title/venue by now (April 2026).
-- `cheng2023adapting` -> **ICLR 2024** (as "Adapting Large Language Models via Reading Comprehension")? No, check. Actually, it was ICLR 2024.
+## Findings
 
-## Acronym Protection
-There is a pervasive lack of curly brace protection `{}` for acronyms in titles, which will lead to incorrect lowercasing in many bibliography styles (including ICML). Affected terms include:
-- `LLM` (numerous instances)
-- `GPT`
-- `BERT`
-- `EMNLP`
-- `RL`
-- `Gemma`
-- `Qwen3`
-- `MNEME`
-- `HuatuoGPT-II`
+### 1. Outdated arXiv References
+Several references have been formally published since their initial arXiv release:
+- **Alignment faking in large language models** (`greenblatt2024alignment`): Published in **ICLR 2025**.
+- **Scaling and evaluating sparse autoencoders** (`gao2024scalingevaluatingsparseautoencoders`): Published in **ICLR 2025** (Oral).
+- **BatchTopK Sparse Autoencoders** (`bussmann2024batchtopksparseautoencoders`): Published in **NeurIPS 2024** (Science of Deep Learning Workshop).
+- **Patchscopes** (`ghandeharioun2024patchscopes`): Published in **ICML 2024**.
+- **Model Organisms for Emergent Misalignment** (`turner2025model`): Published in **ICML 2026**.
+- **Convergent Linear Representations of Emergent Misalignment** (`soligo2025convergent`): Published in **ICML 2026**.
+- **The FineWeb Datasets** (`penedo2024fineweb`): Published in **NeurIPS 2024**.
+- **Overcoming sparsity artifacts in crosscoders** (`minder2025overcoming`): Published in **NeurIPS 2025**.
 
-## Inconsistent Metadata
-- **Mixed citation styles**: Some entries use `journal={arXiv preprint arXiv:...}` while others use `eprint` and `archivePrefix`. Standardizing these would improve the professional look of the bibliography.
+### 2. Technical Reports and Preprints
+The paper cites several very recent technical reports from 2024 and 2025 (e.g., Llama 3 herd of models, Qwen3, Gemma 3). These are appropriate as primary sources given their recent release dates (July 2024, May 2025, and March 2025 respectively).
+
+### 3. Bibliography Consistency
+- The `.bib` file contains both `icml2025.bst` and `icml2026.bst`, which suggests some internal inconsistency or leftover files from a previous year's submission.
+- Some entries like `bricken2023monosemanticity` are cited as `@misc` while they are foundational works in the field.
+- Inconsistencies in venue naming (e.g., full workshop names vs. abbreviated conference names).
 
 ## Conclusion
-The bibliography is very up-to-date with 2025 and even some early 2026 preprints, which is appropriate for the rapidly evolving field of mechanistic interpretability. However, cleaning up the published versions of older 2023/2024 papers and ensuring proper acronym protection will improve the manuscript's scholarly polish.
+The paper's bibliography is remarkably up-to-date with respect to the rapidly moving mechanistic interpretability and AI safety literature. However, updating the citations for works that have already appeared at ICLR, NeurIPS, and even ICML 2026 itself would ensure the paper reflects the final peer-reviewed versions of these contributions.
