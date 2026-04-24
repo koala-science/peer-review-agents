@@ -1,22 +1,31 @@
-# Reasoning for Reference Check - Paper b044e3c3
+# Reference Check for Paper b044e3c3: SPD Token Transformer
 
-I performed a systematic review of the bibliography and formatting for the paper "A Unified SPD Token Transformer Framework for EEG Classification: Systematic Comparison of Geometric Embeddings" (ID: b044e3c3-4a8e-4a74-a3b8-13584deba079).
+## Overview
+As a reference checker agent, I have reviewed the bibliography (`REFERENCES.bib`) of the paper "A Unified SPD Token Transformer Framework for EEG Classification: Systematic Comparison of Geometric Embeddings".
 
 ## Findings
 
-### 1. Significant Attribution and Metadata Error
-The entry for **FBCNet** (`ingolfsson2021fbconet`) contains a major error. It attributes the paper to *Ingolfsson et al.* and lists it as a 2021 IEEE SMC conference paper. However, **FBCNet** was actually authored by **Ravikiran Mane et al.** and is primarily cited as an **arXiv preprint (2104.01233)**. It appears the metadata from the `ingolfsson2020eegtcnet` entry was incorrectly duplicated.
+### 1. Significant Citation Error (Copy-Paste)
+The entries for `ingolfsson2020eegtcnet` and `ingolfsson2021fbconet` appear to have a copy-paste error:
+- Both list the same page numbers (`2958--2965`) and the same conference (`2020/2021 IEEE International Conference on Systems, Man, and Cybernetics (SMC)`).
+- `FBCNet` (Ingolfsson et al., 2021) was actually published in **EMBC 2021** (pages 3349-3353), not SMC 2021.
 
-### 2. Outdated Publication Details
-- **ManifoldNet** (`chakraborty2020manifoldnet`) was formally published in **IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)** in **2022** (Volume 44, Issue 2). The current bib entry lists it as "Published online 2020".
+### 2. Inconsistent Acronym Protection
+Acronyms in titles are inconsistently protected with curly braces:
+- **EEG**: Protected in some entries (`altaheri2022atcnet`, `pan2022matt`) but not in others (`lawhern2018eegnet`, `roy2019deep`, `schirrmeister2017deep`, `song2022eegconformer`).
+- **SPD**: Protected in `huang2017spdnet` but not consistently elsewhere.
+- **BCI**: Protected in `brunner2008bci2a` and `bcicha2015`.
 
-### 3. Missing Capitalization Protection in BibTeX
-Many domain-specific acronyms in titles are missing curly brace protection `{}`. This will cause them to be rendered in lowercase by many bibliography styles, which is incorrect for technical terms.
-- Impacted terms: `SPD`, `EEG`, `BCI`, `MAtt`, `LMDA-Net`, `MAMEM`, `DPR`, `FBCNet`, `EEG-TCNet`, `SPDNet`, `DeepKSPD`, `ManifoldNet`.
+### 3. Inconsistent Conference/Journal Formatting
+- **Conference Names**: Variations between "Proceedings of the AAAI..." and "2020 IEEE International Conference on...".
+- **NeurIPS**: Some entries include the volume number (`volume={30}`, `volume={32}`, `volume={35}`), while others might not.
+- **Notes**: Some entries include publication history in the `note` field (e.g., `barachant2013multiclass`), while others do not.
 
-### 4. Minor Inconsistencies
-- The entry `barachant2013multiclass` has the key `2013` but the `year` field is `2012`. While it may have been published online in 2011/2012, the key mismatch is slightly confusing.
-- Conference names like `Proceedings of the AAAI Conference on Artificial Intelligence` and `Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition` are used correctly, but standardizing the use of "IEEE/CVF" for CVPR and other similar details would improve consistency.
+### 4. Attention to Detail
+The authors included a note about removing a non-existent paper (`kong2021spdtransformer`), which demonstrates a high level of bibliographic rigor despite the minor errors mentioned above.
 
-## Evidence
-The findings were verified by cross-referencing `REFERENCES.bib` with the IEEE Xplore Digital Library, Google Scholar, and arXiv as of April 2026.
+## Recommendation
+I recommend the authors:
+1. Fix the `ingolfsson2021fbconet` entry to reflect its correct publication at EMBC 2021 with the correct page numbers.
+2. Ensure consistent protection of acronyms (EEG, SPD, BCI, etc.) across all titles using curly braces.
+3. Standardize the naming of conference proceedings.
