@@ -7,9 +7,12 @@ from reva.config import (
     CONFIG_FILENAME,
     DEFAULT_CONFIG,
     DEFAULT_INITIAL_PROMPT,
+    PLACEHOLDER_GITHUB_REPO,
+    UPSTREAM_GITHUB_REPO_SLUG,
     RevaConfig,
     find_config,
     load_config,
+    validate_github_repo,
     write_default_config,
 )
 
@@ -41,6 +44,7 @@ def test_default_config_keys_are_exactly_expected():
         "agents_dir",
         "global_rules",
         "platform_skills",
+        "default_system_prompt",
         "github_repo",
     }
 
@@ -228,3 +232,72 @@ def test_initial_prompt_renders_with_staging_base_url():
 
 def test_initial_prompt_mentions_github_file_url():
     assert "github_file_url" in DEFAULT_INITIAL_PROMPT
+
+
+def test_validate_github_repo_accepts_a_real_fork():
+    assert validate_github_repo("https://github.com/alice/peer-review-agents") is None
+    assert validate_github_repo("https://github.com/alice/my-agent.git") is None
+    assert validate_github_repo("git@github.com:alice/whatever.git") is None
+
+
+def test_validate_github_repo_rejects_empty():
+    err = validate_github_repo("")
+    assert err is not None
+    assert "config.toml" in err
+
+
+def test_validate_github_repo_rejects_whitespace_only():
+    err = validate_github_repo("   \n")
+    assert err is not None
+
+
+def test_validate_github_repo_rejects_placeholder():
+    err = validate_github_repo(PLACEHOLDER_GITHUB_REPO)
+    assert err is not None
+    assert PLACEHOLDER_GITHUB_REPO in err
+
+
+def test_validate_github_repo_rejects_canonical_upstream_https():
+    err = validate_github_repo(f"https://github.com/{UPSTREAM_GITHUB_REPO_SLUG}")
+    assert err is not None
+    assert UPSTREAM_GITHUB_REPO_SLUG in err
+    assert "fork" in err.lower()
+
+
+def test_validate_github_repo_rejects_canonical_upstream_with_git_suffix():
+    err = validate_github_repo(f"https://github.com/{UPSTREAM_GITHUB_REPO_SLUG}.git")
+    assert err is not None
+
+
+def test_validate_github_repo_rejects_canonical_upstream_with_trailing_slash():
+    err = validate_github_repo(f"https://github.com/{UPSTREAM_GITHUB_REPO_SLUG}/")
+    assert err is not None
+
+
+def test_validate_github_repo_rejects_canonical_upstream_ssh():
+    err = validate_github_repo(f"git@github.com:{UPSTREAM_GITHUB_REPO_SLUG}.git")
+    assert err is not None
+
+
+def test_validate_github_repo_mentions_bypass_env_var_in_upstream_rejection():
+    err = validate_github_repo(f"https://github.com/{UPSTREAM_GITHUB_REPO_SLUG}")
+    assert err is not None
+    assert "REVA_ALLOW_UPSTREAM_REPO" in err
+
+
+def test_validate_github_repo_accepts_fork_named_peer_review_agents_under_different_owner():
+    assert validate_github_repo("https://github.com/alice/peer-review-agents") is None
+    assert validate_github_repo("https://github.com/alice/peer-review-agents.git") is None
+
+
+def test_validate_github_repo_accepts_fork_under_owner_whose_name_contains_koala_science():
+    """Owner equality is the discriminator: `koala-science-fork/peer-review-agents`
+    must pass because the owner is not literally `koala-science`."""
+    assert validate_github_repo(
+        "https://github.com/koala-science-fork/peer-review-agents"
+    ) is None
+
+
+def test_validate_github_repo_rejects_canonical_upstream_ssh_trailing_slash():
+    err = validate_github_repo(f"git@github.com:{UPSTREAM_GITHUB_REPO_SLUG}/")
+    assert err is not None

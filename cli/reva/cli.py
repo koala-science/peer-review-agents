@@ -1,6 +1,7 @@
 """reva CLI — reviewer agent command-line tool."""
 
 import json
+import os
 import shutil
 import time
 from datetime import datetime, timezone
@@ -11,7 +12,13 @@ from dotenv import load_dotenv
 
 from reva.backends import BACKEND_CHOICES, get_backend
 from reva.cluster import cancel_chain, list_cluster_jobs, submit_agent
-from reva.config import DEFAULT_INITIAL_PROMPT, find_config, load_config, write_default_config
+from reva.config import (
+    DEFAULT_INITIAL_PROMPT,
+    find_config,
+    load_config,
+    validate_github_repo,
+    write_default_config,
+)
 from reva.launch_script import write_launch_files
 from reva.prompt import assemble_prompt
 from reva.tmux import (
@@ -22,12 +29,6 @@ from reva.tmux import (
     kill_session,
     list_sessions,
 )
-
-STARTER_SYSTEM_PROMPT = (
-    "# Agent: {name}\n\n"
-    "Describe this agent's reviewing focus and style here.\n"
-)
-
 
 def _load_project_env(config_path: str | None) -> None:
     """Load the project's `.env` so env-driven settings reach every subcommand."""
@@ -92,8 +93,9 @@ def create(ctx, name, backend):
         raise click.ClickException(f"Agent directory already exists: {agent_dir}")
     agent_dir.mkdir(parents=True)
 
+    starter_template = cfg.default_system_prompt_path.read_text(encoding="utf-8")
     (agent_dir / "system_prompt.md").write_text(
-        STARTER_SYSTEM_PROMPT.format(name=name), encoding="utf-8"
+        starter_template.replace("{name}", name), encoding="utf-8"
     )
 
     config_data = {
@@ -175,6 +177,11 @@ def launch(ctx, name, duration, backend, session_timeout, cluster, partition, ti
     agent_dir = cfg.agents_dir / name
     if not agent_dir.exists():
         raise click.ClickException(f"Agent not found: {agent_dir}")
+
+    if os.environ.get("REVA_ALLOW_UPSTREAM_REPO", "").strip().lower() not in ("1", "true", "yes"):
+        repo_err = validate_github_repo(cfg.github_repo)
+        if repo_err:
+            raise click.ClickException(repo_err)
 
     api_key_path = agent_dir / ".api_key"
     if not api_key_path.exists() or not api_key_path.read_text(encoding="utf-8").strip():

@@ -150,21 +150,30 @@ def test_create_missing_required_args_errors_out():
 
 # ── functional: reva create ──────────────────────────────────────────
 
-def test_create_generates_system_prompt_and_config(tmp_path):
-    """`reva create --name foo` creates a system_prompt.md and config.json."""
-    agents_dir = tmp_path / "agents"
-    agents_dir.mkdir()
+def _mock_cfg_with_starter(tmp_path, agents_dir, starter_text="STARTER {name}\n"):
+    """Build a mock RevaConfig with a real default_system_prompt.md on disk."""
     global_rules = tmp_path / "GLOBAL_RULES.md"
     global_rules.write_text("GLOBAL RULES\n", encoding="utf-8")
     platform_skills = tmp_path / "platform_skills.md"
     platform_skills.write_text("PLATFORM SKILLS\n", encoding="utf-8")
+    default_prompt = tmp_path / "default_system_prompt.md"
+    default_prompt.write_text(starter_text, encoding="utf-8")
 
     mock_cfg = MagicMock()
     mock_cfg.agents_dir = agents_dir
     mock_cfg.global_rules_path = global_rules
     mock_cfg.platform_skills_path = platform_skills
-    mock_cfg.github_repo = ""
+    mock_cfg.default_system_prompt_path = default_prompt
+    mock_cfg.github_repo = "https://github.com/test-owner/my-fork"
     mock_cfg.koala_base_url = "https://koala.science"
+    return mock_cfg
+
+
+def test_create_generates_system_prompt_and_config(tmp_path):
+    """`reva create --name foo` creates a system_prompt.md and config.json."""
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+    mock_cfg = _mock_cfg_with_starter(tmp_path, agents_dir)
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
         result = _invoke("create", "--name", "foo")
@@ -180,20 +189,54 @@ def test_create_generates_system_prompt_and_config(tmp_path):
     assert cfg_data["backend"] == "claude-code"  # default
 
 
+def test_create_system_prompt_uses_default_template(tmp_path):
+    """`reva create` seeds system_prompt.md from cfg.default_system_prompt_path,
+    substituting {name}. This lets maintainers evolve the starter template
+    (e.g. verdict citation rules) without touching Python."""
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+    template = "# Agent: {name}\n\nShared rule body\n"
+    mock_cfg = _mock_cfg_with_starter(tmp_path, agents_dir, starter_text=template)
+
+    with patch("reva.cli._get_config", return_value=mock_cfg):
+        result = _invoke("create", "--name", "quux")
+        assert result.exit_code == 0, result.output
+
+    produced = (agents_dir / "quux" / "system_prompt.md").read_text(encoding="utf-8")
+    assert produced == "# Agent: quux\n\nShared rule body\n"
+
+
+def test_create_preserves_unrelated_braces_in_template(tmp_path):
+    """Starter templates may contain literal `{...}` (LaTeX, JSON, example
+    placeholders) — only `{name}` should be substituted, everything else
+    must pass through verbatim."""
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+    template = (
+        "# Agent: {name}\n\n"
+        "Example JSON: {\"foo\": 1}\n"
+        "LaTeX: $\\mathbb{R}$\n"
+        "Unrelated placeholder: {other}\n"
+    )
+    mock_cfg = _mock_cfg_with_starter(tmp_path, agents_dir, starter_text=template)
+
+    with patch("reva.cli._get_config", return_value=mock_cfg):
+        result = _invoke("create", "--name", "brace-test")
+        assert result.exit_code == 0, result.output
+
+    produced = (agents_dir / "brace-test" / "system_prompt.md").read_text(encoding="utf-8")
+    assert produced == (
+        "# Agent: brace-test\n\n"
+        "Example JSON: {\"foo\": 1}\n"
+        "LaTeX: $\\mathbb{R}$\n"
+        "Unrelated placeholder: {other}\n"
+    )
+
+
 def test_create_with_explicit_backend(tmp_path):
     agents_dir = tmp_path / "agents"
     agents_dir.mkdir()
-    global_rules = tmp_path / "GLOBAL_RULES.md"
-    global_rules.write_text("G\n", encoding="utf-8")
-    platform_skills = tmp_path / "platform_skills.md"
-    platform_skills.write_text("P\n", encoding="utf-8")
-
-    mock_cfg = MagicMock()
-    mock_cfg.agents_dir = agents_dir
-    mock_cfg.global_rules_path = global_rules
-    mock_cfg.platform_skills_path = platform_skills
-    mock_cfg.github_repo = ""
-    mock_cfg.koala_base_url = "https://koala.science"
+    mock_cfg = _mock_cfg_with_starter(tmp_path, agents_dir)
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
         result = _invoke("create", "--name", "bar", "--backend", "codex")
@@ -206,13 +249,7 @@ def test_create_with_explicit_backend(tmp_path):
 def test_create_existing_agent_errors_out(tmp_path):
     agents_dir = tmp_path / "agents"
     (agents_dir / "foo").mkdir(parents=True)
-
-    mock_cfg = MagicMock()
-    mock_cfg.agents_dir = agents_dir
-    mock_cfg.global_rules_path = tmp_path / "GLOBAL_RULES.md"
-    mock_cfg.platform_skills_path = tmp_path / "platform_skills.md"
-    mock_cfg.github_repo = ""
-    mock_cfg.koala_base_url = "https://koala.science"
+    mock_cfg = _mock_cfg_with_starter(tmp_path, agents_dir)
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
         result = _invoke("create", "--name", "foo")
@@ -235,6 +272,7 @@ def test_launch_fails_when_api_key_missing(tmp_path):
 
     mock_cfg = MagicMock()
     mock_cfg.agents_dir = agents_dir
+    mock_cfg.github_repo = "https://github.com/test-owner/my-fork"
     mock_cfg.koala_base_url = "https://koala.science"
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
@@ -258,6 +296,7 @@ def test_launch_fails_when_api_key_empty(tmp_path):
 
     mock_cfg = MagicMock()
     mock_cfg.agents_dir = agents_dir
+    mock_cfg.github_repo = "https://github.com/test-owner/my-fork"
     mock_cfg.koala_base_url = "https://koala.science"
 
     with patch("reva.cli._get_config", return_value=mock_cfg):
@@ -295,7 +334,7 @@ def test_launch_claude_code_resume_collapses_mcp_config_braces(tmp_path):
     mock_cfg.agents_dir = agents_dir
     mock_cfg.global_rules_path = global_rules
     mock_cfg.platform_skills_path = platform_skills
-    mock_cfg.github_repo = ""
+    mock_cfg.github_repo = "https://github.com/test-owner/my-fork"
     mock_cfg.koala_base_url = "https://koala.science"
 
     captured = {}
@@ -520,7 +559,7 @@ def _make_agent_dir(tmp_path, name="foo", *, api_key="KEY"):
     mock_cfg.agents_dir = agents_dir
     mock_cfg.global_rules_path = global_rules
     mock_cfg.platform_skills_path = platform_skills
-    mock_cfg.github_repo = ""
+    mock_cfg.github_repo = "https://github.com/test-owner/my-fork"
     mock_cfg.koala_base_url = "https://koala.science"
 
     return agents_dir, agent_dir, mock_cfg
@@ -709,3 +748,88 @@ def test_launch_cluster_generates_identical_launch_sh_as_tmux(tmp_path):
         return "".join(lines[2:]) if len(lines) > 2 and lines[0].startswith("source ") else s
 
     assert _strip_prelude(tmux_launch) == _strip_prelude(cluster_launch)
+
+
+# ── functional: reva launch github_repo gate ─────────────────────────
+
+def test_launch_fails_when_github_repo_empty(tmp_path, monkeypatch):
+    _, agent_dir, mock_cfg = _make_agent_dir(tmp_path)
+    mock_cfg.github_repo = ""
+    monkeypatch.delenv("REVA_ALLOW_UPSTREAM_REPO", raising=False)
+
+    with patch("reva.cli._get_config", return_value=mock_cfg), \
+         patch("reva.cli.create_session") as mock_create:
+        result = _invoke("launch", "--name", "foo")
+
+    assert result.exit_code != 0
+    assert "github_repo" in result.output
+    mock_create.assert_not_called()
+
+
+def test_launch_fails_when_github_repo_is_placeholder(tmp_path, monkeypatch):
+    _, agent_dir, mock_cfg = _make_agent_dir(tmp_path)
+    mock_cfg.github_repo = "REPLACE WITH YOUR FORK"
+    monkeypatch.delenv("REVA_ALLOW_UPSTREAM_REPO", raising=False)
+
+    with patch("reva.cli._get_config", return_value=mock_cfg), \
+         patch("reva.cli.create_session") as mock_create:
+        result = _invoke("launch", "--name", "foo")
+
+    assert result.exit_code != 0
+    assert "REPLACE WITH YOUR FORK" in result.output
+    mock_create.assert_not_called()
+
+
+def test_launch_fails_when_github_repo_is_canonical_upstream(tmp_path, monkeypatch):
+    _, agent_dir, mock_cfg = _make_agent_dir(tmp_path)
+    mock_cfg.github_repo = "https://github.com/koala-science/peer-review-agents"
+    monkeypatch.delenv("REVA_ALLOW_UPSTREAM_REPO", raising=False)
+
+    with patch("reva.cli._get_config", return_value=mock_cfg), \
+         patch("reva.cli.create_session") as mock_create:
+        result = _invoke("launch", "--name", "foo")
+
+    assert result.exit_code != 0
+    assert "fork" in result.output.lower()
+    mock_create.assert_not_called()
+
+
+def test_launch_fails_when_github_repo_is_canonical_upstream_cluster_mode(tmp_path, monkeypatch):
+    _, agent_dir, mock_cfg = _make_agent_dir(tmp_path)
+    mock_cfg.github_repo = "https://github.com/koala-science/peer-review-agents.git"
+    monkeypatch.delenv("REVA_ALLOW_UPSTREAM_REPO", raising=False)
+
+    with patch("reva.cli._get_config", return_value=mock_cfg), \
+         patch("reva.cli.submit_agent") as mock_submit:
+        result = _invoke("launch", "--name", "foo", "--cluster")
+
+    assert result.exit_code != 0
+    mock_submit.assert_not_called()
+
+
+def test_launch_bypasses_upstream_check_when_env_var_set(tmp_path, monkeypatch):
+    """REVA_ALLOW_UPSTREAM_REPO=1 lets maintainers run against the canonical upstream."""
+    _, agent_dir, mock_cfg = _make_agent_dir(tmp_path)
+    mock_cfg.github_repo = "https://github.com/koala-science/peer-review-agents"
+    monkeypatch.setenv("REVA_ALLOW_UPSTREAM_REPO", "1")
+
+    with patch("reva.cli._get_config", return_value=mock_cfg), \
+         patch("reva.cli.create_session") as mock_create:
+        result = _invoke("launch", "--name", "foo")
+
+    assert result.exit_code == 0, result.output
+    mock_create.assert_called_once()
+
+
+def test_launch_does_not_bypass_upstream_check_when_env_var_is_zero(tmp_path, monkeypatch):
+    """REVA_ALLOW_UPSTREAM_REPO=0 must NOT bypass the gate (explicit off)."""
+    _, agent_dir, mock_cfg = _make_agent_dir(tmp_path)
+    mock_cfg.github_repo = "https://github.com/koala-science/peer-review-agents"
+    monkeypatch.setenv("REVA_ALLOW_UPSTREAM_REPO", "0")
+
+    with patch("reva.cli._get_config", return_value=mock_cfg), \
+         patch("reva.cli.create_session") as mock_create:
+        result = _invoke("launch", "--name", "foo")
+
+    assert result.exit_code != 0
+    mock_create.assert_not_called()

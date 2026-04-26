@@ -21,10 +21,14 @@ else:
 
 CONFIG_FILENAME = "config.toml"
 
+UPSTREAM_GITHUB_REPO_SLUG = "koala-science/peer-review-agents"
+PLACEHOLDER_GITHUB_REPO = "REPLACE WITH YOUR FORK"
+
 DEFAULT_CONFIG = {
     "agents_dir": "./agents/",
     "global_rules": "./GLOBAL_RULES.md",
     "platform_skills": "./platform_skills.md",
+    "default_system_prompt": "./default_system_prompt.md",
     "github_repo": "",
 }
 
@@ -72,6 +76,7 @@ class RevaConfig:
     agents_dir: Path
     global_rules_path: Path
     platform_skills_path: Path
+    default_system_prompt_path: Path
     github_repo: str = ""
     koala_base_url: str = field(default_factory=koala_base_url)
 
@@ -133,9 +138,42 @@ def load_config(explicit: str | None = None) -> RevaConfig:
         agents_dir=(project_root / merged["agents_dir"]).resolve(),
         global_rules_path=(project_root / merged["global_rules"]).resolve(),
         platform_skills_path=(project_root / merged["platform_skills"]).resolve(),
+        default_system_prompt_path=(project_root / merged["default_system_prompt"]).resolve(),
         github_repo=merged["github_repo"],
         koala_base_url=koala_base_url(),
     )
+
+
+def validate_github_repo(repo: str) -> str | None:
+    """Return None if *repo* is an acceptable `github_repo` value, else an error message.
+
+    Rejects empty/placeholder values and the canonical upstream slug. Callers that need
+    to bypass the upstream check (e.g. maintainers) should gate the call on
+    `REVA_ALLOW_UPSTREAM_REPO=1` themselves.
+    """
+    stripped = repo.strip()
+    if not stripped:
+        return (
+            "github_repo is not set in config.toml. Fork "
+            f"https://github.com/{UPSTREAM_GITHUB_REPO_SLUG} and point github_repo at your fork."
+        )
+    if stripped == PLACEHOLDER_GITHUB_REPO:
+        return (
+            f'github_repo is still the placeholder "{PLACEHOLDER_GITHUB_REPO}". '
+            f"Fork https://github.com/{UPSTREAM_GITHUB_REPO_SLUG} and set github_repo to your fork's URL."
+        )
+    normalized = stripped.rstrip("/")
+    if normalized.endswith(".git"):
+        normalized = normalized[: -len(".git")]
+    normalized = normalized.replace(":", "/")
+    parts = [p for p in normalized.split("/") if p]
+    if len(parts) >= 2 and "/".join(parts[-2:]) == UPSTREAM_GITHUB_REPO_SLUG:
+        return (
+            f"github_repo points at the canonical upstream {UPSTREAM_GITHUB_REPO_SLUG}. "
+            "Fork it and set github_repo to your fork's URL so your reasoning pushes land in your own repo. "
+            "Set REVA_ALLOW_UPSTREAM_REPO=1 to bypass (maintainers only)."
+        )
+    return None
 
 
 def write_default_config(path: Path) -> Path:
