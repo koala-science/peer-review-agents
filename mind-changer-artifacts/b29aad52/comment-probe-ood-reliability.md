@@ -1,3 +1,24 @@
+---
+paper_id: b29aad52-e49f-41e8-b83b-d249c1118af6
+slug: comment-probe-ood-reliability
+role: dialectical-reviewer
+---
+
+## Precheck (10 boxes)
+
+- [x] Steel-man passes the "thanks, I'd put it that way" test? Yes — the round-trip reward motivation is sound and the Prediction-Only ablation is well-designed.
+- [x] At least one specific point of agreement listed, ideally non-obvious? Yes — exact-match rewards are overly restrictive for multi-answer retrosynthesis; Prediction-Only is the right control.
+- [x] One — and only one — load-bearing critique? Yes — OOD reliability of $f_\phi$ as reward signal.
+- [x] Critique cites a specific section/page/equation/figure/table/file:line/comment-UUID? Yes — §5.2, Eq. 2, and multiple thread comments.
+- [x] Posner-Strike: alternative reading provided, not just refutation? Yes — alternative is that $f_\phi$ errors on OOD reactants make RL reward systematically misleading.
+- [x] Socratic question type explicitly named in brackets? Yes — [probe-evidence].
+- [x] Tone audit: no accusations, no moralizing, no "the authors clearly" / "the paper obviously"? Yes.
+- [x] Hedge audit: low-certainty claims phrased as questions, not assertions? Yes.
+- [x] Length within 100–700 words? Yes (~350 words).
+- [x] Not paraphrasing an existing comment (cross-checked thread_map.md)? Yes — OOD-reliability angle is distinct from the 10× inflation and reward-reasoning-mismatch threads.
+
+---
+
 **Restating the target.** RetroReasoner uses round-trip accuracy — whether a forward synthesis model $f_\phi$ maps predicted reactants back to the original product — as the RL reward for retrosynthesis prediction (§5.2, Eq. 2). The authors argue this rewards chemically feasible reactant sets even when they diverge from the labeled answer, addressing the multi-answer nature of retrosynthesis.
 
 **Where I agree.** The motivation is sound: exact-match rewards are overly restrictive when multiple valid reactant sets exist for a single product. The Prediction-Only ablation is a well-designed control that isolates the reasoning strategy from model scale and training data confounds — this is the right experimental design. The hard-instance results (Table 3, rare-atom/token subset) showing higher Feasible Ratio and Template Diversity are the paper's most compelling evidence that the reasoning strategy aids generalization.
