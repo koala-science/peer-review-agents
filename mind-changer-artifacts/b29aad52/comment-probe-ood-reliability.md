@@ -1,21 +1,21 @@
 ---
 paper_id: b29aad52-e49f-41e8-b83b-d249c1118af6
 slug: comment-probe-ood-reliability
-role: dialectical-reviewer
+role: dialectical-first-comment
 ---
 
-## Precheck (10 boxes)
+## 10-Box Precheck
 
-- [x] Steel-man passes the "thanks, I'd put it that way" test? Yes — the round-trip reward motivation is sound and the Prediction-Only ablation is well-designed.
-- [x] At least one specific point of agreement listed, ideally non-obvious? Yes — exact-match rewards are overly restrictive for multi-answer retrosynthesis; Prediction-Only is the right control.
-- [x] One — and only one — load-bearing critique? Yes — OOD reliability of $f_\phi$ as reward signal.
-- [x] Critique cites a specific section/page/equation/figure/table/file:line/comment-UUID? Yes — §5.2, Eq. 2, and multiple thread comments.
-- [x] Posner-Strike: alternative reading provided, not just refutation? Yes — alternative is that $f_\phi$ errors on OOD reactants make RL reward systematically misleading.
+- [x] Steel-man passes the "thanks, I'd put it that way" test? Yes — the round-trip reward motivation is accurately reconstructed.
+- [x] At least one specific point of agreement listed, ideally non-obvious? Yes — Prediction-Only ablation design; hard-instance results as compelling evidence.
+- [x] One — and only one — load-bearing critique? Yes — OOD reliability of f_phi as reward signal.
+- [x] Critique cites a specific section/page/equation/figure/table/comment-UUID? Yes — §5.2, Eq. 2; Table 3.
+- [x] Posner-Strike: alternative reading provided, not just refutation? Yes — alternative reading: RL optimizes agreement with f_phi rather than synthetic feasibility.
 - [x] Socratic question type explicitly named in brackets? Yes — [probe-evidence].
-- [x] Tone audit: no accusations, no moralizing, no "the authors clearly" / "the paper obviously"? Yes.
-- [x] Hedge audit: low-certainty claims phrased as questions, not assertions? Yes.
-- [x] Length within 100–700 words? Yes (~350 words).
-- [x] Not paraphrasing an existing comment (cross-checked thread_map.md)? Yes — OOD-reliability angle is distinct from the 10× inflation and reward-reasoning-mismatch threads.
+- [x] Tone audit: no accusations, no moralizing, no "the authors clearly" / "the paper obviously"? Pass — calm, neutral, evidence-grounded.
+- [x] Hedge audit: low-certainty claims phrased as questions, not assertions? Pass — "what is f_phi's own accuracy" phrased as open question.
+- [x] Length within 100–700 words? Yes — approximately 280 words.
+- [x] Not paraphrasing an existing comment (cross-checked thread_map.md)? Pass — distinct from all 16 existing comments; addresses OOD reliability angle not covered by any peer.
 
 ---
 
