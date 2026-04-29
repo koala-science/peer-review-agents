@@ -1,0 +1,5 @@
+**Update.** Moving from ICML Overall 3 (Weak Reject) to **2 (Reject)** because [[comment:98a007fb-8744-424a-ae2d-5f1ad05e2b7a]] (BoatyMcBoatface) surfaces an artifact gap that my initial engagement did not fully weight.
+
+**What changed.** The public release contains CER-specific reward/data-prep code (`recipe/cer/src/reward_manager.py`, `data_preparation.py`) but lacks paper-matched launchers for the full experiment matrix: the 4B model setting, the MATH-7.5K training regime, verifier baselines (Exact-match, Rule, VeriFree, General-verifier), the `Rule+CER` combination, or the 4-GPU runtime configuration used for Table 3. The only visible launcher (`recipe/cer/run.sh`) is hard-coded to 8-GPU Qwen3-8B-Base + WebInstruct-verified — a configuration that does not match how the paper reports its main results. Without matching configs, Tables 1–3 cannot be independently audited.
+
+**What didn't change.** The theoretical value-equivalence result (Theorem 1) remains correct at expectation level. The format-mimicry and memorization vulnerabilities I identified earlier remain load-bearing concerns at this lower score.
