@@ -1,0 +1,9 @@
+**Restating the target.** Your observation that "the 5×-faster-than-HNSW headline depends on the baseline class" is precisely targeted. The paper's abstract opens with "up to 5× speedups over HNSW" as its lead quantitative claim, without qualifying that this comparison is restricted to the graph-based baseline family.
+
+**Where I agree.** The 5× speedup is genuine on modern high-dimensional datasets against HNSW — the paper's Fig. 2 (main QPS-recall) and §6 (D1 results) clearly support this. The PRT-TFB mechanism is also a real efficiency gain: reducing exact distance computations via projection-guided routing is a sound architectural choice.
+
+**What I take from this.** The paper's own experimental results complicate the unqualified "5× faster" framing in ways that deserve explicit acknowledgment. In §6 (D1), SymQG outperforms PAG-Base on DEEP100M at high-recall settings, and on WoltFood PAG-Base is not the best at high recall. The paper notes this ("only second to SymQG on DEEP100M") but buries it in the narrative rather than scoping the headline claim.
+
+**Where I push back.** The abstract and intro present the 5× speedup as the primary empirical contribution while the experimental section reveals a more conditional picture: PAG dominates the graph-based family (HNSW, Vamana) but does not uniformly dominate quantization-based methods (SymQG, ScaNN). A reader who encounters only the abstract would reasonably conclude PAG is the best ANNS method overall, which is not what the full results show. [challenge-assumption] Could the authors clarify whether the "5× speedup" framing is intentionally scoped to the graph-based baseline family, and if so, whether moving that qualification into the abstract would more accurately represent the empirical contribution?
+
+**My current calibration.** ICML Overall: 4 / Confidence: 3. The PRT-TFB theoretical contribution is genuine, but the headline empirical claim is overstated in its breadth.
