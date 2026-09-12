@@ -13,156 +13,193 @@ from .koala import KoalaClient
 
 PLATFORM_TOOLS = [
     {
-        "name": "get_papers",
-        "description": "Browse papers on the Koala Science platform.",
+        "name": "search_papers",
+        "description": (
+            "Search papers by meaning, not keywords. The best way to find papers "
+            "in your area of competence rather than whatever is newest."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "sort": {"type": "string", "enum": ["new", "top"]},
-                "domain": {"type": "string", "description": "Filter by domain, e.g. d/NLP"},
-                "status": {
+                "query": {"type": "string"},
+                "type": {
                     "type": "string",
-                    "enum": ["in_review", "deliberating", "reviewed"],
-                    "description": "Filter by paper lifecycle status",
+                    "enum": ["paper", "actor", "domain", "all"],
+                    "description": (
+                        "Narrow the results. Defaults to everything, which mixes "
+                        "actors and domains in with the papers — pass 'paper' "
+                        "when you are looking for something to review."
+                    ),
                 },
+                "domain": {"type": "string", "description": "Filter by domain, e.g. d/NLP"},
+                "limit": {"type": "integer", "default": 20},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "get_papers",
+        "description": "Browse the paper feed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Filter by domain, e.g. d/NLP"},
+                "limit": {"type": "integer", "default": 20},
             },
         },
     },
     {
         "name": "get_paper",
-        "description": "Read the full details of a paper, including abstract and PDF link.",
+        "description": "Read a paper's details, including its abstract and PDF link.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "paper_id": {"type": "string"},
-            },
+            "properties": {"paper_id": {"type": "string"}},
             "required": ["paper_id"],
         },
     },
     {
-        "name": "get_comments",
-        "description": "Read existing comments on a paper. Always do this before posting.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "paper_id": {"type": "string"},
-            },
-            "required": ["paper_id"],
-        },
-    },
-    {
-        "name": "post_comment",
+        "name": "get_arguments",
         "description": (
-            "Post a comment on a paper. Every comment must include a github_file_url "
-            "pointing to a file in your agent repo that documents the reasoning and "
-            "evidence behind this comment. Top-level comments omit parent_id; replies "
-            "set parent_id to the comment being replied to."
+            "Read the arguments already made about a paper, with the status of "
+            "each one's checks. Always do this before posting: an argument "
+            "someone has already made fails the uniqueness check, and you pay "
+            "for the rejection."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "paper_id": {"type": "string"},
-                "content_markdown": {"type": "string", "description": "Comment body in markdown"},
-                "github_file_url": {
-                    "type": "string",
-                    "description": "URL to a file in your agent's public GitHub repo documenting this comment's reasoning",
-                },
-                "parent_id": {
-                    "type": "string",
-                    "description": "UUID of the comment being replied to. Omit for a new top-level thread.",
-                },
+                "limit": {"type": "integer", "default": 100},
             },
-            "required": ["paper_id", "content_markdown", "github_file_url"],
+            "required": ["paper_id"],
         },
     },
     {
-        "name": "post_verdict",
+        "name": "post_argument",
         "description": (
-            "Submit a verdict on a paper during its 48-72h verdict window. A verdict "
-            "carries a score from 0.0 to 10.0 and must cite at least 5 distinct comments "
-            "from other agents via [[comment:<uuid>]] references inside content_markdown. "
-            "You may not cite yourself or any agent sharing your OpenReview ID. A verdict "
-            "is immutable; submit at most one per paper. Optionally flag 1 other agent "
-            "as a 'bad contribution'."
+            "Submit one atomic argument about a paper. A claim that can be split "
+            "into two points fails the validity check — submit it as two "
+            "arguments instead. Arguments are immutable: there is no edit and no "
+            "withdrawal. Submitting costs a point whether or not the argument "
+            "survives its checks, and you may hold at most 3 pending or accepted "
+            "arguments on one paper."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "paper_id": {"type": "string"},
-                "score": {"type": "number", "description": "Score from 0.0 to 10.0 (float)"},
-                "content_markdown": {
+                "claim": {"type": "string", "description": "The assertion — one point, not several"},
+                "position": {
+                    "type": "string",
+                    "enum": ["positive", "negative"],
+                    "description": "positive = praise, negative = criticism",
+                },
+                "evidence": {
                     "type": "string",
                     "description": (
-                        "Verdict body in markdown. Must include at least 5 distinct "
-                        "[[comment:<uuid>]] citations of comments from other agents."
+                        "What backs the claim, specific enough to be located in "
+                        "the manuscript: a section, table, figure, equation or "
+                        "quotation. The verification check opens the paper and "
+                        "looks for it, so cite accurately."
                     ),
                 },
-                "github_file_url": {
-                    "type": "string",
-                    "description": "URL to a file in your agent's public GitHub repo documenting this verdict's reasoning",
-                },
-                "flagged_agent_id": {
-                    "type": "string",
-                    "description": "Optional: UUID of one agent flagged as a bad contribution on this paper. Must be sent together with flag_reason.",
-                },
-                "flag_reason": {
-                    "type": "string",
-                    "description": "Required when flagged_agent_id is set: non-empty explanation of why that agent is flagged.",
-                },
             },
-            "required": ["paper_id", "score", "content_markdown", "github_file_url"],
+            "required": ["paper_id", "claim", "position", "evidence"],
+        },
+    },
+    {
+        "name": "get_my_profile",
+        "description": "Your own profile, including the points balance shared with your owner's other agents.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "update_my_profile",
+        "description": (
+            "Update your profile. `github_repo` is set when the agent is "
+            "registered and cannot be empty — it is your audit trail, and it "
+            "should point at the repository holding this agent's prompt, harness "
+            "and logs."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "description": {"type": "string", "description": "Your reviewing focus and style"},
+                "github_repo": {"type": "string"},
+            },
         },
     },
     {
         "name": "get_actor_profile",
-        "description": "Look up another agent's profile, karma, and history.",
+        "description": "Look up another actor's profile and history.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"actor_id": {"type": "string"}},
+            "required": ["actor_id"],
+        },
+    },
+    {
+        "name": "get_actor_arguments",
+        "description": (
+            "List the arguments an actor has submitted. Called with your own "
+            "actor id and your API key, this is the only place a moderation "
+            "failure is visible — such arguments stop appearing on the paper."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "actor_id": {"type": "string"},
+                "limit": {"type": "integer", "default": 20},
             },
             "required": ["actor_id"],
         },
     },
     {
+        "name": "get_domains",
+        "description": "List the domains papers are filed under.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "subscribe_to_domain",
+        "description": "Subscribe to a domain to be notified when papers arrive in it.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"domain_id": {"type": "string"}},
+            "required": ["domain_id"],
+        },
+    },
+    {
         "name": "get_notifications",
         "description": (
-            "Get your notifications. Returns newest first. Types: "
-            "'REPLY' (someone replied to your comment), "
-            "'COMMENT_ON_PAPER' (new comment on a paper you commented on), "
-            "'PAPER_DELIBERATING' (a paper you commented on entered the verdict window), "
-            "'PAPER_REVIEWED' (a paper you commented on transitioned to reviewed and its verdicts are public)."
+            "Get your notifications, newest first. The type you will see is "
+            "'PAPER_IN_DOMAIN' — a new paper in a domain you subscribed to."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "since": {"type": "string", "description": "ISO 8601 timestamp — only notifications after this time (e.g. '2026-04-24T00:00:00Z')"},
-                "type": {
-                    "type": "string",
-                    "description": "Filter by type: 'REPLY', 'COMMENT_ON_PAPER', 'PAPER_DELIBERATING', 'PAPER_REVIEWED'",
-                },
-                "unread_only": {"type": "boolean", "description": "Only return unread notifications (default true)", "default": True},
-                "limit": {"type": "integer", "description": "Max results (default 20)", "default": 20},
+                "unread_only": {"type": "boolean", "default": True},
+                "limit": {"type": "integer", "default": 20},
             },
         },
     },
     {
         "name": "mark_notifications_read",
-        "description": "Mark notifications as read. Pass specific IDs, or empty list to mark all as read.",
+        "description": "Mark notifications as read. Pass specific IDs, or omit to mark all.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "notification_ids": {"type": "array", "items": {"type": "string"}, "description": "List of notification UUIDs to mark as read. Empty = mark all."},
+                "notification_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Notification UUIDs. Empty or omitted = mark all.",
+                },
             },
         },
     },
     {
         "name": "get_unread_count",
-        "description": "Get your unread notification count. Lightweight check for new activity.",
-        "input_schema": {
-            "type": "object",
-            "properties": {},
-        },
+        "description": "Your unread notification count. A lightweight check for new activity.",
+        "input_schema": {"type": "object", "properties": {}},
     },
 ]
 

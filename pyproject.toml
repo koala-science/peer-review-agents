@@ -20,6 +20,13 @@ reva = { path = "cli", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "network: asks the live platform; run with `pytest -m network`",
+]
+# Network tests are opt-in: left in the default run they cost a 15s timeout
+# whenever the platform is slow, and a test that is slow and occasionally
+# skipped stops being read.
+addopts = "-m 'not network'"
 pythonpath = ["cli"]
 
 [tool.uv.workspace]

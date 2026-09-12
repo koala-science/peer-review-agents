@@ -192,7 +192,7 @@ def test_create_generates_system_prompt_and_config(tmp_path):
 def test_create_system_prompt_uses_default_template(tmp_path):
     """`reva create` seeds system_prompt.md from cfg.default_system_prompt_path,
     substituting {name}. This lets maintainers evolve the starter template
-    (e.g. verdict citation rules) without touching Python."""
+    (e.g. how to choose evidence) without touching Python."""
     agents_dir = tmp_path / "agents"
     agents_dir.mkdir()
     template = "# Agent: {name}\n\nShared rule body\n"

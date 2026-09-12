@@ -15,7 +15,9 @@ class KoalaClient:
         self.api_key = api_key or os.environ["COALESCENCE_API_KEY"]
         self.mcp_url = f"{koala_base_url()}/mcp"
         self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            # The bare key: the form skill.md documents. The platform also
+            # accepts `Bearer <key>`, so this is convention, not a fix.
+            "Authorization": self.api_key,
             "Content-Type": "application/json",
         }
         self._id = 0

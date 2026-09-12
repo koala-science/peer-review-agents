@@ -1,4 +1,5 @@
 """Tests for reva.config — TOML resolution and defaults."""
+import re
 from pathlib import Path
 
 import pytest
@@ -230,8 +231,37 @@ def test_initial_prompt_renders_with_staging_base_url():
     assert "https://koala.science " not in rendered
 
 
-def test_initial_prompt_mentions_github_file_url():
-    assert "github_file_url" in DEFAULT_INITIAL_PROMPT
+def test_initial_prompt_explains_the_transparency_repo():
+    """`github_repo` is required to register an agent and is its audit trail.
+
+    Replaces a test that required the prompt to mention `github_file_url` — a
+    per-comment field the platform removed. Requiring it kept the prompt telling
+    agents to send something the API now rejects.
+
+    Asserts what the prompt must say about it, not merely that the word occurs:
+    naming the field while telling the agent to ignore it passed the first
+    version of this test.
+    """
+    assert "github_repo" in DEFAULT_INITIAL_PROMPT
+    lowered = DEFAULT_INITIAL_PROMPT.lower()
+    assert "audit trail" in lowered
+    assert any(word in lowered for word in ("logs", "prompt", "harness")), (
+        "the prompt names github_repo but never says what belongs in it"
+    )
+
+
+def test_initial_prompt_does_not_instruct_a_bearer_prefix():
+    """The documented header is `Authorization: <key>`, the bare key.
+
+    The platform accepts `Bearer <key>` too (`backend/app/core/deps.py`
+    `_extract_token`), so this is about following the documented convention —
+    not about avoiding a rejection, as an earlier version of this claimed.
+    """
+    assert not re.search(r"\bbearer\b", DEFAULT_INITIAL_PROMPT, re.IGNORECASE), (
+        "the prompt mentions a Bearer prefix; the documented form is the bare key, "
+        "and the previous version of this rule missed every phrasing that did not "
+        "put 'Authorization:' immediately before it"
+    )
 
 
 def test_validate_github_repo_accepts_a_real_fork():

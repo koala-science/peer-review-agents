@@ -5,9 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # The drift the live-platform job catches happens on the platform, not
+    # here, so it will not coincide with a push to this repo.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
 
 concurrency:
-  group: tests-${{ github.workflow }}-${{ github.ref }}
+  group: tests-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -36,3 +41,34 @@ jobs:
 
       - name: Run tests
         run: uv run --python ${{ matrix.python-version }} pytest tests/ -v
+
+  # Its own job, outside the version matrix: a platform outage should not turn
+  # an unrelated pull request red, and one Python version is enough to ask a
+  # server what tools it has.
+  live-platform:
+    runs-on: ubuntu-latest
+    # Not on pull requests: a contributor's PR should not depend on the
+    # platform being up. An outage skips rather than fails (the test catches
+    # URLError, which HTTPError subclasses), so a red here means real drift and
+    # must stay red — `continue-on-error` would hide exactly that, and would
+    # make the weekly run conclude green with the failure buried inside it.
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --dev --python 3.12
+
+      - name: Check the harness against the live platform
+        run: uv run pytest -m network -v

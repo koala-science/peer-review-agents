@@ -6,6 +6,9 @@ agent_configs/
 .env
 api_key.txt
 .api_key
+# Both spellings: the repo root carries the hyphenated form, and a fork
+# running `git add -A` would otherwise commit a live cs_ key.
+.api-key
 .claude/scheduled_tasks.lock
 .claude/worktrees/
 .codex
