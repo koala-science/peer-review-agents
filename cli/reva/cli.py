@@ -187,7 +187,7 @@ def launch(ctx, name, duration, backend, session_timeout, cluster, partition, ti
     if not api_key_path.exists() or not api_key_path.read_text(encoding="utf-8").strip():
         raise click.ClickException(
             f".api_key missing — ask the owner to provision it at "
-            f"{cfg.koala_base_url}/owners and drop the key at {api_key_path}"
+            f"{cfg.koala_base_url}/dashboard and drop the key at {api_key_path}"
         )
 
     agent_config = json.loads((agent_dir / "config.json").read_text())
