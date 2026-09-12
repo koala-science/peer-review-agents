@@ -1,16 +1,8 @@
 """The harness must expose tools the platform actually has.
 
-`agent_definition/harness/tools.py` offered `post_comment` and `post_verdict`
-for five months after the platform replaced both with `post_argument`, and
-offered no way to submit an argument at all — an agent built on it could browse
-and never contribute. Nothing here noticed.
-
-Modules are loaded by path rather than imported: `agent_definition.harness`'s
-`__init__` pulls in `harness.py`, which imports `anthropic`, which is not a
-declared dependency — importing the package aborts collection for the whole
-suite under `uv sync --dev`. Same approach as `test_harness_koala.py`.
-
-These are structural checks — that the surface matches — not proof the
+`tools.py` offered `post_comment` and `post_verdict` for five months after the
+platform replaced both with `post_argument`, and offered no way to submit an
+argument at all. Structural checks only: that the surface matches, not that the
 descriptions are good advice.
 """
 import importlib.util
@@ -23,13 +15,9 @@ import pytest
 
 HARNESS = Path(__file__).resolve().parents[1] / "agent_definition" / "harness"
 
-# The platform's MCP surface, from `tools/list` on the live server. Tools the
-# harness offers must come from here; it need not offer all of them.
-#
-# Copied rather than imported because the platform is not a dependency of this
-# repo. The drift it cannot catch is a platform *rename*: the stale name stays
-# in this set and the guard stays green. `test_offered_tools_exist_on_the_live_
-# platform` covers that when the network is available.
+# The platform's MCP surface. Copied because the platform is not a dependency;
+# a rename leaves the stale name here and this guard green, which is what the
+# network test below exists to catch.
 PLATFORM_TOOLS = {
     "search_papers", "get_papers", "get_paper", "submit_paper",
     "get_arguments", "post_argument",
@@ -50,10 +38,10 @@ PACKAGE = "_harness_under_test"
 def _load(name: str):
     """Load one harness module without importing the package.
 
-    `tools.py` imports `.koala` relatively, so the modules are loaded under a
-    synthetic package whose `__path__` points at the harness directory. Going
-    through `agent_definition.harness` instead would execute its `__init__`,
-    which imports `anthropic` and aborts collection for the whole suite.
+    Importing `agent_definition.harness` executes its `__init__`, which imports
+    `anthropic` — not a declared dependency, so collection aborts under
+    `uv sync --dev`. The synthetic package is what makes `tools.py`'s relative
+    `.koala` import resolve.
     """
     sys.modules.setdefault("httpx", MagicMock())
     if PACKAGE not in sys.modules:
@@ -113,15 +101,9 @@ def test_the_client_sends_the_documented_header():
     assert client.headers["Authorization"] == "cs_test_key"
 
 
-# ---------------------------------------------------------------------------
-# The parameter-level check the hardcoded set above cannot do: it asks the live
-# server what it actually accepts, which is the only way to catch a renamed tool
-# or a parameter that no longer exists.
-#
-# Opt-in — `pytest -m network`. Worth running whenever the harness or the
-# platform changes, and worth a CI job of its own; not worth a 15-second
-# timeout on every local run.
-# ---------------------------------------------------------------------------
+# Asks the live server what it accepts — the only way to catch a renamed tool or
+# a parameter that no longer exists. Opt-in (`pytest -m network`) because a 15s
+# timeout on every local run gets a test ignored; CI runs it off-PR.
 
 
 @pytest.mark.network

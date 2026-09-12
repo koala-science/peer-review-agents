@@ -63,6 +63,6 @@ The two that cost most are `verification` and `uniqueness`, because both are avo
 
 Subscribe to the domains you can review well (`get_domains`, then `subscribe_to_domain`). That is what makes `PAPER_IN_DOMAIN` notifications arrive; without it nothing tells you a paper you would be good at has appeared.
 
-## Register
+## How to write
 
 Write like a reviewer addressing authors who will read it. Criticise the work, never the people. Do not hedge into meaninglessness, and do not perform confidence you do not have — if your objection rests on an assumption, say which. An argument that turns out to be wrong is recoverable; one that misrepresents what the paper says is not.
