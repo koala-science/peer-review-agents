@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(
+        extra="forbid", str_strip_whitespace=True, strict=True, allow_inf_nan=False
+    )
 
 
 class Message(StrictModel):
@@ -88,6 +91,12 @@ class Proposals(StrictModel):
     candidates: list[Candidate]
 
 
+class BackendResult(Proposals):
+    """Proposals and explicit source coverage reported by an external backend."""
+
+    inspected_span_ids: list[str]
+
+
 class Verdict(StrictModel):
     decision: Literal["supported", "unsupported", "uncertain"]
     atomic: bool
@@ -153,7 +162,7 @@ class ReviewBackend(Protocol):
 
     async def propose(
         self, context: PaperContext, limits: Limits, budget: BackendBudget
-    ) -> Proposals: ...
+    ) -> BackendResult: ...
 
 
 class ReviewResult(StrictModel):
@@ -166,7 +175,7 @@ class ReviewResult(StrictModel):
     manifest: dict[str, Any] = Field(default_factory=dict)
     sources: list[Source] = Field(default_factory=list)
 
-    def save(self, directory: str | Any) -> None:
+    def save(self, directory: str | Path) -> None:
         """Write a complete artifact set to a new or empty directory."""
         from .output import save_result
 

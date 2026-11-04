@@ -6,11 +6,28 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import yaml
 from pydantic import Field, model_validator
 
 from .types import Limits, StrictModel
+
+
+class ConfigLoader(yaml.SafeLoader):
+    """Safe YAML with duplicate fields rejected instead of silently overridden."""
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict:
+        self.flatten_mapping(node)
+        mapping = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if not isinstance(key, str):
+                raise ValueError("YAML keys must be strings")  # noqa: TRY004 -- invalid configuration document
+            if key in mapping:
+                raise ValueError("Duplicate YAML field")
+            mapping[key] = self.construct_object(value_node, deep=deep)
+        return mapping
 
 
 class ModelConfig(StrictModel):
@@ -26,8 +43,25 @@ class ModelConfig(StrictModel):
         if self.provider == "custom":
             if not self.factory or ":" not in self.factory:
                 raise ValueError("custom provider requires factory: path.py:function")
-        elif not self.base_url or not re.match(r"^https?://", self.base_url):
-            raise ValueError("provider requires an http(s) base_url")
+        else:
+            try:
+                parsed = urlsplit(self.base_url or "")
+                valid = (
+                    parsed.scheme in {"https", "http"}
+                    and parsed.hostname
+                    and len(parsed.hostname) <= 253
+                    and parsed.username is None
+                    and parsed.password is None
+                    and not parsed.query
+                    and not parsed.fragment
+                    and (parsed.port is None or parsed.port > 0)
+                )
+            except ValueError:
+                valid = False
+            if not valid:
+                raise ValueError(
+                    "base_url must be an HTTP(S) URL without credentials, query, or fragment"
+                )
         if self.provider == "koala_proxy" and not self.api_key_env:
             raise ValueError("koala_proxy requires api_key_env")
         if self.api_key_env and not re.fullmatch(
@@ -69,7 +103,17 @@ class LoadedAgent:
         self.explicit_model = config.model is not None
 
 
-def _expand(value: Any) -> Any:
+def _expand(
+    value: Any,
+    active: set[int] | None = None,
+    depth: int = 0,
+    count: list[int] | None = None,
+) -> Any:
+    active = set() if active is None else active
+    count = [0] if count is None else count
+    count[0] += 1
+    if depth > 32 or count[0] > 10000:
+        raise ValueError("YAML configuration exceeds nesting or node limit")
     if isinstance(value, str):
 
         def replace(match: re.Match) -> str:
@@ -79,10 +123,19 @@ def _expand(value: Any) -> Any:
             return os.environ[name]
 
         return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", replace, value)
-    if isinstance(value, list):
-        return [_expand(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _expand(item) for key, item in value.items()}
+    if isinstance(value, (list, dict)):
+        if id(value) in active:
+            raise ValueError("Recursive YAML aliases are not supported")
+        active.add(id(value))
+        try:
+            if isinstance(value, list):
+                return [_expand(item, active, depth + 1, count) for item in value]
+            return {
+                key: _expand(item, active, depth + 1, count)
+                for key, item in value.items()
+            }
+        finally:
+            active.remove(id(value))
     return value
 
 
@@ -99,8 +152,12 @@ def load_config(
             raise ValueError(f"Cyclic or duplicate config reference: {file.name}")
         seen_paths.add(file)
         try:
-            raw = yaml.safe_load(file.read_text(encoding="utf-8"))
-        except yaml.YAMLError as exc:
+            with file.open("r", encoding="utf-8") as handle:
+                content = handle.read(1_048_577)
+            if len(content) > 1_048_576:
+                raise ValueError("YAML configuration exceeds size limit")
+            raw = yaml.load(content, Loader=ConfigLoader)
+        except (yaml.YAMLError, RecursionError) as exc:
             raise ValueError("Invalid YAML syntax") from exc
         if not isinstance(raw, dict):
             raise ValueError("agent.yaml must contain a mapping")  # noqa: TRY004 -- invalid input document
@@ -137,7 +194,11 @@ def load_config(
                         raise ValueError(f"Missing environment variable: {key_env}")
                 factory_path, symbol = model.factory.rsplit(":", 1)
                 resolved = (file.parent / factory_path).resolve()
-                if not resolved.is_file() or not symbol.isidentifier():
+                if (
+                    not resolved.is_file()
+                    or resolved.suffix != ".py"
+                    or not symbol.isidentifier()
+                ):
                     raise ValueError("Invalid custom factory path or function name")
                 model.factory = f"{resolved}:{symbol}"
         instruction = (file.parent / config.instruction_file).read_text(

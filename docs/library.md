@@ -6,6 +6,9 @@
 `./agent.yaml` unless `--config` selects another file. Paths resolve relative to
 the YAML file that contains them. `${NAME}` reads the process environment; missing
 values fail validation. Keys remain environment references. `.env` is not loaded.
+Duplicate fields, recursive aliases, excessive nesting, and oversized YAML fail
+validation. Numeric limits must be finite; booleans cannot stand in for integers.
+Provider base URLs cannot contain credentials, query parameters, or fragments.
 
 Children have `role: proposer` or `role: verifier`. They inherit shared limits and
 the root model. A complete child model block overrides its provider. Nested
@@ -47,12 +50,18 @@ service failures. Never put credentials or raw response bodies in error messages
 ## Existing orchestration
 
 Use `Agent.from_backend(backend, config="agent.yaml", provider=verifier_provider)`.
-The backend implements `async propose(context, limits, budget) -> Proposals` and
+The backend implements `async propose(context, limits, budget) -> BackendResult` and
 declares `supports_budget = True`. See `providers/python_backend.py` in a workspace.
 
 Before each model request, await `budget.reserve_call()`. Report its response with
 `budget.report_usage(response)`. Return at most `max_candidates_per_task` candidates.
 The coordinator applies its deadline, then performs evidence and duplicate checks.
+Return `BackendResult(candidates=..., inspected_span_ids=...)` with only the spans
+actually inspected. Unknown IDs fail the backend task. Old `Proposals` results
+have unknown coverage and cannot support accepted candidates. Source snapshots and
+limits are copied before handoff so accidental edits cannot change the coordinator's data.
+Backend model identity and prompt digest are marked unknown; available model usage
+is retained separately. Koala cannot infer an external backend's private prompts.
 Python extensions are trusted code; cooperative callbacks cannot sandbox deliberate
 budget bypasses. A declaration is an interface contract, not proof of isolation.
 
@@ -74,7 +83,12 @@ The reader groups Markdown sections and PDF pages into bounded tasks. It records
 unread spans and blank PDF pages. Semantic interpretation happens in proposal and
 verification calls; headings alone do not establish scientific claims or coverage.
 Scanned PDFs fail when they contain no usable text. Inputs above 100 MiB fail
-before extraction. OCR, automatic search, and experiment execution are out of scope.
+before extraction. Extracted text is capped at 2 MiB and 10,000 spans per source;
+PDFs are capped at 1,000 pages. A run accepts at most 32 files, 8 MiB of extracted
+text, and 20,000 spans. Exceeding these caps raises an input error without truncation.
+PDF parsing runs in a separate process that is killed on deadline or cancellation.
+This is a resource-control boundary, not an OS sandbox or a hard memory limit.
+OCR, automatic search, and experiment execution are out of scope.
 
 Schema and source checks are mechanical. Atomicity, support, absence scope, and
 semantic duplicates involve model judgments. They can be wrong. A revision gets
@@ -84,8 +98,8 @@ conclusions can share evidence.
 
 ## Budgets and results
 
-All tasks share a call budget and monotonic deadline. Each transient failure has
-at most two retries. Malformed output has one repair attempt. Every attempt uses
+Extraction and model tasks share a monotonic deadline. Each task has at most two
+transient retries in total, including its repair call. Malformed output has one repair attempt. Every attempt uses
 a call slot. Authentication and credit errors are not retried. New proposals leave
 capacity for first-pass evidence review; retries and revisions can still exhaust it.
 
@@ -93,14 +107,22 @@ Input size uses a conservative UTF-8 byte bound rather than a provider tokenizer
 This can produce partial coverage sooner than the nominal token limit suggests.
 No text is silently truncated. Reduce task instructions or increase limits when
 appropriate. Output size is requested from the provider and truncated responses fail.
+Built-in HTTP adapters request uncompressed responses and stop reading above 8 MiB.
+Compressed responses are rejected before decoding. Custom Python
+providers must enforce their own I/O limits. Diagnostics store error categories
+and HTTP status codes rather than custom exception text that might contain keys.
 
 Complete runs may contain no arguments. Partial runs preserve accepted work and
 record missing stages or coverage. Failed runs have no accepted arguments.
 `result.save(path)` stages all five artifacts before replacing a new or empty
 directory. CLI runs keep a sibling `.NAME.journal.jsonl` until export succeeds.
 After an interruption, inspect the journal and choose a new output destination.
+An input failure before any task starts removes its empty journal, allowing a corrected rerun.
 The Python API returns diagnostics with the result; durable journaling is a CLI feature.
 
 Run manifests contain limits, tasks, source hashes, prompt digests, model identifiers,
 and available usage. They do not contain provider credentials or pricing estimates.
 Source snapshots and rationale remain public review explanations, not private reasoning.
+Markdown reports escape source and model text to prevent active HTML, images,
+or links from being inserted into the report. JSON preserves the original text;
+applications that render it must escape it for their output format.

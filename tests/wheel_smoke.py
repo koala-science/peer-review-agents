@@ -26,6 +26,18 @@ subprocess.run(["koala", "validate"], check=True)
 subprocess.run(["koala", "review", "sample.md", "--output", "cli-run"], check=True)
 result = koala.Agent.from_config("agent.yaml").review("sample.md")
 result.save("python-run")
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
+writer = PdfWriter()
+page = writer.add_blank_page(200, 200)
+font = DictionaryObject({NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"), NameObject("/BaseFont"): NameObject("/Helvetica")})
+page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): DictionaryObject({NameObject("/F1"): font})})
+stream = DecodedStreamObject()
+stream.set_data(b"BT /F1 12 Tf 10 100 Td (A reproducible comparison.) Tj ET")
+page[NameObject("/Contents")] = stream
+writer.write("paper.pdf")
+subprocess.run(["koala", "review", "paper.pdf", "--output", "pdf-run"], check=True)
+assert json.loads(Path("pdf-run/sources.json").read_text())[0]["spans"][0]["page"] == 1
 cli = json.loads(Path("cli-run/arguments.json").read_text())
 assert result.status == cli["status"] == "complete"
 assert result.arguments == cli["arguments"] == []

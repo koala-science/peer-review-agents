@@ -15,9 +15,10 @@ from pydantic import ValidationError
 
 from .config import LoadedAgent, load_config
 from .providers import ProviderError, build_provider
-from .sources import check_evidence, normalize, read_source
+from .sources import check_evidence, normalize, read_source_async
 from .types import (
     Argument,
+    BackendResult,
     Candidate,
     Duplicate,
     Limits,
@@ -65,9 +66,11 @@ class BudgetExhausted(RuntimeError):
 
 
 class Budget:
-    def __init__(self, limits: Limits) -> None:
+    def __init__(self, limits: Limits, *, started: float | None = None) -> None:
         self.limits = limits
-        self.deadline = time.monotonic() + limits.max_run_seconds
+        self.deadline = (
+            time.monotonic() if started is None else started
+        ) + limits.max_run_seconds
         self.calls = 0
         self.usage: list[ModelResponse] = []
         self.lock = asyncio.Lock()
@@ -139,23 +142,44 @@ class Agent:
         journal: Path | None = None,
     ) -> ReviewResult:
         """Read local sources and return accepted arguments plus diagnostics."""
-        documents = [read_source(paper)]
-        for path in sources or []:
-            source = read_source(path)
+        started = time.monotonic()
+        paths = [paper, *(sources or [])]
+        if len(paths) > 32:
+            raise ValueError("A review accepts at most 32 input files")
+        documents = []
+        total_text_bytes = 0
+        total_spans = 0
+        for path in paths:
+            remaining = self.loaded.config.limits.max_run_seconds - (
+                time.monotonic() - started
+            )
+            source = await read_source_async(path, remaining)
             if source.id not in {item.id for item in documents}:
                 documents.append(source)
-        run = Run(self, documents, journal)
+                total_text_bytes += sum(
+                    len(span.text.encode("utf-8")) for span in source.spans
+                )
+                total_spans += len(source.spans)
+                if total_text_bytes > 8 * 1024 * 1024 or total_spans > 20000:
+                    raise ValueError("Combined sources exceed extraction limits")
+        run = Run(self, documents, journal, started=started)
         return await run.execute()
 
 
 class Run:
     def __init__(
-        self, agent: Agent, sources: list[Source], journal: Path | None
+        self,
+        agent: Agent,
+        sources: list[Source],
+        journal: Path | None,
+        *,
+        started: float | None = None,
     ) -> None:
         self.agent, self.sources, self.journal = agent, sources, journal
         self.root = agent.loaded
         self.limits = self.root.config.limits
-        self.budget = Budget(self.limits)
+        self.started = time.monotonic() if started is None else started
+        self.budget = Budget(self.limits, started=self.started)
         self.run_id = str(uuid.uuid4())
         self.tasks: list[TaskResult] = []
         self.diagnostics: list[dict[str, Any]] = []
@@ -164,7 +188,6 @@ class Run:
         self.covered: set[str] = set()
         self.providers: dict[str, ModelProvider] = {}
         self.partial = any(source.gaps for source in sources)
-        self.started = time.monotonic()
         self.counter = 0
         self.completed_proposals = 0
         self.runtime_failed = False
@@ -256,6 +279,7 @@ class Run:
         record.prompt_digest = digest
         try:
             async with self.semaphore:
+                retries_left = 2
                 for repair in range(2):
                     request = ModelRequest(
                         model=agent.config.model.name,
@@ -276,6 +300,10 @@ class Run:
                             "Input exceeds conservative token bound; coverage is partial"
                         )
                     response = None
+                    digest = hashlib.sha256(
+                        json.dumps([m.model_dump() for m in messages]).encode()
+                    ).hexdigest()
+                    record.prompt_digest = digest
                     for attempt in range(3):
                         await self.budget.reserve_call()
                         try:
@@ -303,8 +331,9 @@ class Run:
                                 retryable = exc.retryable
                             else:
                                 retryable = True
-                            if not retryable or attempt == 2:
+                            if not retryable or retries_left == 0:
                                 raise
+                            retries_left -= 1
                             await asyncio.sleep(
                                 min(0.25 * 2**attempt, self.budget.remaining_seconds)
                             )
@@ -344,8 +373,10 @@ class Run:
             record.status = "failed"
             # Custom exceptions may contain credentials; persist only safe categories.
             record.error = (
-                str(exc)
-                if isinstance(exc, (BudgetExhausted, ProviderError))
+                exc.public_message
+                if isinstance(exc, ProviderError)
+                else str(exc)
+                if isinstance(exc, BudgetExhausted)
                 else type(exc).__name__
             )
             self.note(task_id=envelope.task_id, status="failed", error=record.error)
@@ -527,27 +558,47 @@ class Run:
                 self.tasks.append(record)
                 proposals = await asyncio.wait_for(
                     self.agent.backend.propose(
-                        PaperContext(paper=self.sources[0], sources=self.sources),
-                        self.limits,
+                        PaperContext(
+                            paper=self.sources[0], sources=self.sources
+                        ).model_copy(deep=True),
+                        self.limits.model_copy(deep=True),
                         self.budget,
                     ),
                     timeout=self.budget.remaining_seconds,
                 )
-                proposals = Proposals.model_validate(proposals)
+                if isinstance(proposals, Proposals) and not isinstance(
+                    proposals, BackendResult
+                ):
+                    proposals = Proposals.model_validate(proposals.model_dump())
+                else:
+                    proposals = BackendResult.model_validate(
+                        proposals.model_dump()
+                        if isinstance(proposals, BackendResult)
+                        else proposals
+                    )
                 if len(proposals.candidates) > self.limits.max_candidates_per_task:
                     raise ValueError("Backend exceeded candidate limit")
+                if isinstance(proposals, BackendResult):
+                    inspected = set(proposals.inspected_span_ids)
+                    if not inspected.issubset(self.spans):
+                        raise ValueError("Backend reported unknown inspected spans")
+                else:
+                    inspected = set()
+                    self.note(
+                        reason="Backend omitted inspected_span_ids; coverage is unknown"
+                    )
                 record.status, record.output = "complete", proposals.model_dump()
                 self.completed_proposals += 1
-                self.covered.update(self.spans)
+                self.covered.update(inspected)
                 provenance = Provenance(
                     agent_name="external_backend",
-                    model="backend-reported",
-                    prompt_digest=hashlib.sha256(RULES.encode()).hexdigest(),
+                    model="unknown (external backend)",
+                    prompt_digest="unknown",
                     task_ids=[envelope.task_id],
                 )
                 for candidate in proposals.candidates:
                     await self.verify(
-                        candidate, provenance.model_copy(deep=True), set(self.spans)
+                        candidate, provenance.model_copy(deep=True), inspected
                     )
             else:
                 proposers = [

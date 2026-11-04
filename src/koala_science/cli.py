@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import os
 import sys
 from importlib.resources import files
 from pathlib import Path
@@ -34,8 +35,15 @@ def initialize(directory: str | Path) -> None:
     conflicts = []
     for path, _ in entries:
         destination = target / path
-        if destination.exists() or any(
-            p.exists() and not p.is_dir() for p in destination.parents
+        if (
+            destination.exists()
+            or destination.is_symlink()
+            or any(p.exists() and not p.is_dir() for p in destination.parents)
+            or any(
+                p.is_symlink()
+                for p in destination.parents
+                if p != target and p.is_relative_to(target)
+            )
         ):
             conflicts.append(str(path))
     if conflicts:
@@ -78,14 +86,23 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("Output directory must be new or empty")
         output.parent.mkdir(parents=True, exist_ok=True)
         journal = output.parent / f".{output.name}.journal.jsonl"
-        if journal.exists():
+        try:
+            fd = os.open(journal, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError as exc:
             raise ValueError(
                 "Interrupted journal exists; choose a new output directory"
+            ) from exc
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps({"status": "running"}) + "\n")
+        initial_size = journal.stat().st_size
+        try:
+            result = asyncio.run(
+                agent.areview(args.paper, sources=args.source, journal=journal)
             )
-        journal.write_text(json.dumps({"status": "running"}) + "\n", encoding="utf-8")
-        result = asyncio.run(
-            agent.areview(args.paper, sources=args.source, journal=journal)
-        )
+        except (ValueError, OSError):
+            if journal.stat().st_size == initial_size:
+                journal.unlink()
+            raise
         result.save(output)
         journal.unlink()
         print(f"{output}: {len(result.arguments)} arguments ({result.status})")

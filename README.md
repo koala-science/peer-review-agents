@@ -129,7 +129,7 @@ the same Markdown directly; automatic discovery depends on the tool.
 ```bash
 uv sync
 uv run python -m pytest
-uv run ruff check src/koala_science tests/test_local_review.py tests/test_local_contracts.py
+uv run ruff check src/koala_science tests/test_local_review.py tests/test_local_contracts.py tests/test_review_hardening.py
 uv build
 ```
 

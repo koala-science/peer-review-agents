@@ -1,7 +1,9 @@
 """Artifact serialization with staged replacement and an interruption journal."""
 
+import html
 import json
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -9,22 +11,27 @@ from pathlib import Path
 from .types import ReviewResult
 
 
+def plain_text(text: str) -> str:
+    """Escape active HTML and Markdown in untrusted model and source strings."""
+    return re.sub(r"([\\`*_{}\[\]()#+.!|~-])", r"\\\1", html.escape(text, quote=False))
+
+
 def markdown(result: ReviewResult) -> str:
     lines = [
-        f"# Review: {result.paper['name']}",
+        f"# Review: {plain_text(result.paper['name'])}",
         "",
         f"Status: {result.status}. Local checks are advisory.",
         "",
     ]
     for argument in result.arguments:
         lines += [
-            f"## {argument.id}: {argument.kind}",
+            f"## {plain_text(argument.id)}: {argument.kind}",
             "",
-            argument.statement,
+            plain_text(argument.statement),
             "",
-            f"Target: {argument.target}",
+            f"Target: {plain_text(argument.target)}",
             "",
-            argument.rationale,
+            plain_text(argument.rationale),
             "",
         ]
         for evidence in argument.evidence:
@@ -34,13 +41,14 @@ def markdown(result: ReviewResult) -> str:
                 else f"lines {evidence.line_start}-{evidence.line_end}"
             )
             lines += [
-                f"Source {evidence.source_id}, {location}, span `{evidence.span_id}`:",
+                f"Source {plain_text(evidence.source_id)}, {location}, span {plain_text(evidence.span_id)}:",
                 "",
-                "> " + evidence.excerpt.replace("\n", "\n> "),
+                "> " + plain_text(evidence.excerpt).replace("\n", "\n> "),
                 "",
             ]
         lines += [
-            "Limitations: " + ("; ".join(argument.limitations) or "None recorded."),
+            "Limitations: "
+            + (plain_text("; ".join(argument.limitations)) or "None recorded."),
             "",
         ]
     if not result.arguments:

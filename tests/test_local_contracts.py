@@ -10,7 +10,15 @@ import yaml
 from pypdf import PdfWriter
 from test_local_review import FakeProvider, workspace
 
-from koala_science import Agent, Limits, Message, ModelRequest, ModelResponse, Proposals
+from koala_science import (
+    Agent,
+    BackendResult,
+    Limits,
+    Message,
+    ModelRequest,
+    ModelResponse,
+    Proposals,
+)
 from koala_science.cli import main
 from koala_science.config import ModelConfig, load_config
 from koala_science.providers import HTTPProvider, ProviderError
@@ -274,7 +282,13 @@ def test_backend_passes_same_checks(tmp_path):
             )
             response = await provider.generate(request)
             budget.report_usage(response)
-            return Proposals.model_validate_json(response.text)
+            proposals = Proposals.model_validate_json(response.text)
+            return BackendResult(
+                candidates=proposals.candidates,
+                inspected_span_ids=[
+                    s.id for source in context.sources for s in source.spans
+                ],
+            )
 
     config = workspace(tmp_path)
     result = Agent.from_backend(
@@ -282,6 +296,7 @@ def test_backend_passes_same_checks(tmp_path):
     ).review(tmp_path / "sample.md")
     assert result.arguments == []
     assert result.manifest["model_calls"] == 1
+    assert "Excerpt does not match" in json.dumps(result.diagnostics)
     with pytest.raises(ValueError, match="supports_budget"):
         Agent.from_backend(object(), config=config)
 

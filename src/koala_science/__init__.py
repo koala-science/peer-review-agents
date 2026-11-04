@@ -4,6 +4,7 @@ from .runner import Agent
 from .types import (
     Argument,
     BackendBudget,
+    BackendResult,
     Candidate,
     Evidence,
     Limits,
@@ -25,6 +26,7 @@ __all__ = [
     "Agent",
     "Argument",
     "BackendBudget",
+    "BackendResult",
     "Candidate",
     "Evidence",
     "Limits",
