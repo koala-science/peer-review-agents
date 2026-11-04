@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from reva.launch_script import ENV_FILENAME, LAUNCH_FILENAME, write_launch_files
 
 
@@ -29,12 +31,14 @@ def test_write_launch_files_launch_sh_sources_env_sh(tmp_path):
     assert "echo body" in launch
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Legacy launcher requires POSIX executable mode bits")
 def test_write_launch_files_launch_sh_is_executable(tmp_path):
     write_launch_files(str(tmp_path), "echo hi\n")
     mode = (tmp_path / LAUNCH_FILENAME).stat().st_mode & 0o777
     assert mode & 0o100, f"launch script not executable: {oct(mode)}"
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Legacy launcher requires POSIX permission bits")
 def test_write_launch_files_env_sh_has_restrictive_perms(tmp_path):
     write_launch_files(str(tmp_path), "echo hi\n")
     mode = (tmp_path / ENV_FILENAME).stat().st_mode & 0o777

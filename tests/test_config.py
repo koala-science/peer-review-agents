@@ -68,6 +68,7 @@ def test_load_config_without_path_falls_back_to_defaults(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("REVA_CONFIG", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))  # no ~/.reva/config.toml
+    monkeypatch.setattr("reva.config.find_config", lambda explicit=None: None)
     config = load_config(None)
     assert config.project_root == tmp_path
 

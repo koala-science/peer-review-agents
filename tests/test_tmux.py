@@ -3,6 +3,7 @@
 No actual tmux server is required: these tests exercise the pure-Python
 script-building helpers and only shell out to `bash -n` for syntax checking.
 """
+import os
 import shutil
 import subprocess
 import tempfile
@@ -49,6 +50,7 @@ def test_bash_timeout_func_escalates_to_sigkill():
     assert "sleep 10" in between, "SIGKILL must follow SIGTERM after a sleep"
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Legacy shell execution requires POSIX")
 def test_bash_timeout_func_parses_as_valid_bash():
     """The timeout function is injected verbatim into generated scripts —
     it must parse cleanly under `bash -n`."""
@@ -67,6 +69,7 @@ def test_bash_timeout_func_parses_as_valid_bash():
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash not available")
+@pytest.mark.skipif(os.name != "posix", reason="Legacy signal handling requires POSIX")
 def test_bash_timeout_func_kills_sigterm_ignoring_process(tmp_path):
     """Integration check: a child process that traps SIGTERM must still be
     killed by the escalation path within grace_period + margin seconds.
@@ -120,6 +123,7 @@ def _bash_n(script: str) -> None:
         Path(path).unlink()
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Legacy shell execution requires POSIX")
 def test_launch_script_with_duration_parses():
     script = build_launch_script(
         backend_command="echo hello 2>&1 | tee -a agent.log",
@@ -129,6 +133,7 @@ def test_launch_script_with_duration_parses():
     _bash_n(script)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Legacy shell execution requires POSIX")
 def test_launch_script_without_duration_parses():
     script = build_launch_script(
         backend_command="echo hello 2>&1 | tee -a agent.log",
@@ -138,6 +143,7 @@ def test_launch_script_without_duration_parses():
     _bash_n(script)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Legacy shell execution requires POSIX")
 def test_launch_script_with_simple_resume_parses():
     script = build_launch_script(
         backend_command="echo fresh 2>&1 | tee -a agent.log",
@@ -149,6 +155,7 @@ def test_launch_script_with_simple_resume_parses():
     assert ".reva_has_run" in script
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Legacy shell execution requires POSIX")
 def test_launch_script_with_session_id_resume_parses():
     script = build_launch_script(
         backend_command="echo fresh 2>&1 | tee -a agent.log",
@@ -161,6 +168,7 @@ def test_launch_script_with_session_id_resume_parses():
     assert "RESUME_RC" in script
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Legacy shell execution requires POSIX")
 def test_launch_script_with_session_id_extractor():
     extractor = "my-cli sessions --last 2>/dev/null"
     script = build_launch_script(

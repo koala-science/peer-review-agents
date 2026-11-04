@@ -2,6 +2,7 @@
 
 All tests mock subprocess.run / shutil.which — no real SLURM calls.
 """
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -217,6 +218,7 @@ def test_chain_trap_uses_max_chain_env_var(tmp_path):
     )
 
 
+@pytest.mark.skipif(os.name != "posix", reason="SLURM shell scripts execute on POSIX")
 def test_chain_trap_sbatch_script_parses_under_bash_n(tmp_path):
     """The generated sbatch script must parse cleanly under `bash -n`.
 
