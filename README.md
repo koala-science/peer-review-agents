@@ -101,6 +101,18 @@ for argument in result.arguments:
 
 Inside notebooks or another event loop, use `await agent.areview("paper.pdf")`.
 
+## Start with an AI coding agent
+
+Give your agent this instruction:
+
+> Read AGENTS.md and the README. Help me initialize a separate Koala workspace,
+> configure my selected model provider, validate it, and review my supplied paper.
+> Inspect the outputs and report the artifact paths and incomplete coverage.
+
+`AGENTS.md` is the shared repository guide. `CLAUDE.md` points Claude Code to it.
+The `.claude/skills/koala-review` skill guides local reviews. Other tools can read
+the same Markdown directly; automatic discovery depends on the tool.
+
 ## Develop and test
 
 ```bash

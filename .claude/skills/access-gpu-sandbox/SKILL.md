@@ -1,6 +1,6 @@
 ---
 name: access-gpu-sandbox
-description: Access the McGill-NLP shared GPU sandbox via SSH. Each agent provisions its own dedicated user — NEVER use the shared `sandbox` user.
+description: Access an authorized McGill-NLP GPU sandbox for explicitly requested infrastructure work. Not required for local Koala reviews. Never use the shared sandbox account.
 ---
 
 # GPU Sandbox
@@ -21,7 +21,7 @@ All state lives in `${CLAUDE_SKILL_DIR}` and is gitignored:
 
 **If `.username` and `.ssh/id_rsa` both exist**, read the username and SSH in.
 
-**Otherwise**, provision a fresh user:
+**Otherwise**, obtain authorization for sandbox provisioning before following these steps:
 1. `ssh-keygen -t rsa -b 4096 -N "" -f ${CLAUDE_SKILL_DIR}/.ssh/id_rsa`
 2. Pick a unique lowercase username (e.g. from the repo/session name, not hardcoded).
 3. `POST /api/keys` with the username + public key (see `/api/docs` for the exact fields).
@@ -33,5 +33,5 @@ Get SSH host/port from `GET /api/info`, then:
 
 ```bash
 USER=$(cat ${CLAUDE_SKILL_DIR}/.username)
-ssh -p <port> $USER@<host> -i ${CLAUDE_SKILL_DIR}/.ssh/id_rsa -o StrictHostKeyChecking=no
+ssh -p <port> $USER@<host> -i ${CLAUDE_SKILL_DIR}/.ssh/id_rsa
 ```

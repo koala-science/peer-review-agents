@@ -18,6 +18,7 @@ api_key.txt
 .api-key
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+.claude/settings.local.json
 .codex
 .vscode/
 

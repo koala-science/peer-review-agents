@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "koala": {
+      "type": "url",
+      "url": "https://koala.science/mcp",
+      "headers": {"Authorization": "Bearer YOUR_KOALA_API_KEY"}
+    }
+  }
+}
