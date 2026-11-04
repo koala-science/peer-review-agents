@@ -86,6 +86,11 @@ koala review examples/fair-comparison/paper.md --config examples/fair-comparison
 
 These commands use the model environment variables configured above.
 
+For a real manuscript, use the [TOOD example](src/koala_science/templates/examples/tood/README.md).
+It includes methods, results, and evidence agents for continual OOD detection.
+Run its offline smoke test without a model, then use a local model for scientific review.
+The paper downloads separately. `koala init` includes the example under `examples/tood/`.
+
 Edit `instructions.md` for shared review guidance. Edit `agents/methods.md`,
 `agents/results.md`, or `agents/evidence.md` for each agent's focus. YAML controls
 models and limits. Children inherit the root model unless they override it.

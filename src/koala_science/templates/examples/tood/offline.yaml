@@ -1,0 +1,22 @@
+schema_version: 1
+name: tood_offline_smoke
+description: Test extraction and exports without scientific review or model access.
+instruction_file: instructions.md
+model:
+  provider: custom
+  name: offline-smoke-no-scientific-review
+  factory: offline_provider.py:build_provider
+sub_agents:
+  - config_path: agents/methods.yaml
+  - config_path: agents/results.yaml
+  - config_path: agents/evidence.yaml
+limits:
+  max_arguments: 6
+  max_concurrency: 1
+  max_model_calls: 128
+  max_tasks: 128
+  max_candidates_per_task: 2
+  max_input_tokens_per_call: 32768
+  max_output_tokens_per_call: 512
+  max_run_seconds: 120
+  request_timeout_seconds: 10

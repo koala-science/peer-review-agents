@@ -20,6 +20,9 @@ assert Path("providers/python_backend.py").exists()
 assert Path("examples/fair-comparison/agent.yaml").exists()
 assert Path("examples/fair-comparison/instructions.md").exists()
 assert Path("examples/fair-comparison/paper.md").exists()
+assert Path("examples/tood/agent.yaml").exists()
+assert Path("examples/tood/agents/evidence.md").exists()
+assert Path("examples/tood/offline_provider.py").exists()
 Path("empty.py").write_text('import json\\nfrom koala_science import ModelResponse\\nclass Empty:\\n async def generate(self, request):\\n  return ModelResponse(text=json.dumps({"candidates": []}), model="fake")\\ndef build():\\n return Empty()\\n')
 Path("agent.yaml").write_text("schema_version: 1\\nname: smoke\\ninstruction_file: instructions.md\\nmodel:\\n  provider: custom\\n  name: fake\\n  factory: empty.py:build\\n")
 subprocess.run(["koala", "validate"], check=True)
@@ -38,6 +41,11 @@ page[NameObject("/Contents")] = stream
 writer.write("paper.pdf")
 subprocess.run(["koala", "review", "paper.pdf", "--output", "pdf-run"], check=True)
 assert json.loads(Path("pdf-run/sources.json").read_text())[0]["spans"][0]["page"] == 1
+subprocess.run(["koala", "validate", "--config", "examples/tood/offline.yaml"], check=True)
+subprocess.run(["koala", "review", "paper.pdf", "--config", "examples/tood/offline.yaml", "--output", "tood-offline-run"], check=True)
+tood = json.loads(Path("tood-offline-run/manifest.json").read_text())
+assert tood["status"] == "complete"
+assert {u["model"] for u in tood["usage"]} == {"offline-smoke-no-scientific-review"}
 cli = json.loads(Path("cli-run/arguments.json").read_text())
 assert result.status == cli["status"] == "complete"
 assert result.arguments == cli["arguments"] == []

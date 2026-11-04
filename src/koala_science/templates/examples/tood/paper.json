@@ -1,0 +1,11 @@
+{
+  "title": "TOOD: Task-Aware Out-of-Distribution Score Calibration for Continual Learners",
+  "authors": ["Mostafa ElAraby", "Samer B. Nashed", "Liam Paull"],
+  "arxiv_id": "2607.29592v1",
+  "landing_page": "https://arxiv.org/abs/2607.29592v1",
+  "pdf_url": "https://arxiv.org/pdf/2607.29592v1",
+  "downloaded_sha256": "fd8788253aecd114014be05af5d9d84ef442089c7ef638d8efd56d2d3da17929",
+  "physical_pages": 21,
+  "checked_on": "2026-11-04",
+  "note": "Download reference only. The actual input bytes and source locators are recorded by each run. The PDF is not bundled."
+}

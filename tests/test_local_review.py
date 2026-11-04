@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from koala_science import Agent, ModelResponse, ReviewResult
+from koala_science import Agent, ModelRequest, ModelResponse, ReviewResult
 from koala_science.cli import initialize
 from koala_science.config import load_config
 
@@ -170,3 +170,109 @@ def test_example_agent_is_scaffolded_and_runs(tmp_path, monkeypatch):
     assert result.arguments[0].kind == "criticism"
     result.save(tmp_path / "example-run")
     assert "40 epochs" in (tmp_path / "example-run" / "arguments.md").read_text()
+
+
+def test_tood_example_inherits_the_local_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KOALA_MODEL", "local-test-model")
+    monkeypatch.setenv("KOALA_MODEL_BASE_URL", "http://127.0.0.1:1234/v1")
+    monkeypatch.delenv("KOALA_MODEL_API_KEY", raising=False)
+    initialize(tmp_path)
+    config = load_config(tmp_path / "examples/tood/agent.yaml")
+    assert config.config.model.api_key_env is None
+    assert [child.config.role for child in config.children] == [
+        "proposer",
+        "proposer",
+        "verifier",
+    ]
+    assert all(child.config.model == config.config.model for child in config.children)
+    assert all(child.config.limits == config.config.limits for child in config.children)
+    assert config.config.limits.max_concurrency == 1
+
+
+def test_tood_offline_smoke_needs_no_model_or_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from koala_science.providers import HTTPProvider
+
+    async def forbidden_request(
+        self: HTTPProvider, request: ModelRequest
+    ) -> ModelResponse:
+        pytest.fail("The offline example must not call a model endpoint")
+
+    monkeypatch.setattr(HTTPProvider, "generate", forbidden_request)
+    for key in ["KOALA_MODEL", "KOALA_MODEL_BASE_URL", "KOALA_MODEL_API_KEY"]:
+        monkeypatch.delenv(key, raising=False)
+    initialize(tmp_path)
+    agent = Agent.from_config(tmp_path / "examples/tood/offline.yaml")
+    result = agent.review(tmp_path / "sample.md")
+    assert result.status == "complete"
+    assert result.arguments == []
+    assert result.manifest["coverage"]["skipped_spans"] == []
+    assert result.manifest["model_calls"] > 0
+    assert {entry["model"] for entry in result.manifest["usage"]} == {
+        "offline-smoke-no-scientific-review"
+    }
+    result.save(tmp_path / "offline-result")
+    assert (tmp_path / "offline-result/manifest.json").is_file()
+
+
+def test_tood_review_rejects_fabricated_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KOALA_MODEL", "fixture")
+    monkeypatch.setenv("KOALA_MODEL_BASE_URL", "http://127.0.0.1:1234/v1")
+    initialize(tmp_path)
+    paper = tmp_path / "synthetic-ood-fixture.md"
+    quote = "Calibration statistics use only in-distribution replay samples."
+    paper.write_text(quote, encoding="utf-8")
+
+    class CalibrationFixture:
+        async def generate(self, request: ModelRequest) -> ModelResponse:
+            payload = json.loads(request.messages[-1].content)
+            if payload["stage"] == "proposal":
+                span = payload["spans"][0]
+                candidate = {
+                    "kind": "praise",
+                    "target": "calibration data",
+                    "statement": "The stated calibration statistics do not require OOD samples.",
+                    "rationale": "The fixture limits calibration statistics to ID replay samples.",
+                    "evidence": [
+                        {
+                            "source_id": span["source_id"],
+                            "span_id": span["id"],
+                            "page": None,
+                            "line_start": 1,
+                            "line_end": 1,
+                            "excerpt": quote,
+                        }
+                    ],
+                    "limitations": [
+                        "Synthetic fixture, not a judgment of the TOOD paper."
+                    ],
+                }
+                fabricated = json.loads(json.dumps(candidate))
+                fabricated["evidence"][0]["excerpt"] = (
+                    "A fabricated experimental result."
+                )
+                output = {"candidates": [candidate, fabricated]}
+            else:
+                assert payload["stage"] == "evidence"
+                output = {
+                    "decision": "supported",
+                    "atomic": True,
+                    "reason": "Scripted fixture decision, not scientific evaluation.",
+                }
+            return ModelResponse(text=json.dumps(output), model="calibration-fixture")
+
+    result = Agent.from_config(
+        tmp_path / "examples/tood/agent.yaml", provider=CalibrationFixture()
+    ).review(paper)
+    assert result.status == "complete"
+    assert len(result.arguments) == 1
+    assert result.arguments[0].evidence[0].excerpt == quote
+    assert any(
+        item.get("rejected") == "Excerpt does not match the source"
+        for item in result.diagnostics
+    )

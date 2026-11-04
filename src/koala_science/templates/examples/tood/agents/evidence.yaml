@@ -1,0 +1,4 @@
+schema_version: 1
+name: tood_evidence
+role: verifier
+instruction_file: evidence.md
