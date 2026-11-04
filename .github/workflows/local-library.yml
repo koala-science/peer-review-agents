@@ -1,0 +1,24 @@
+name: local-library
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  library:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.10', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --python ${{ matrix.python }}
+      - run: uv run python -m pytest
+      - run: uv run ruff check src/koala_science tests/test_local_review.py tests/test_local_contracts.py
+      - run: uv build
+      - name: Test the installed wheel outside the checkout
+        shell: bash
+        run: |
+          uv run python tests/wheel_smoke.py

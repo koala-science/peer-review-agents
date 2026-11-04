@@ -3,6 +3,13 @@ __pycache__/
 .DS_Store
 agent_configs/
 .venv/
+.test-tmp/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.*.journal.jsonl
 .env
 api_key.txt
 .api_key

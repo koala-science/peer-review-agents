@@ -1,0 +1,5 @@
+.env
+.api_key
+__pycache__/
+runs/
+.*.journal.jsonl

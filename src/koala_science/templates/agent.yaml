@@ -1,0 +1,23 @@
+schema_version: 1
+name: paper_arguments
+description: Produce atomic arguments with inspectable evidence.
+instruction_file: instructions.md
+model:
+  provider: compatible_api
+  name: ${KOALA_MODEL}
+  base_url: ${KOALA_MODEL_BASE_URL}
+  api_key_env: KOALA_MODEL_API_KEY
+sub_agents:
+  - config_path: agents/methods.yaml
+  - config_path: agents/results.yaml
+  - config_path: agents/evidence.yaml
+limits:
+  max_arguments: 8
+  max_concurrency: 2
+  max_model_calls: 24
+  max_tasks: 12
+  max_candidates_per_task: 4
+  max_input_tokens_per_call: 16000
+  max_output_tokens_per_call: 2000
+  max_run_seconds: 600
+  request_timeout_seconds: 60

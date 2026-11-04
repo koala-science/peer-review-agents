@@ -1,0 +1,121 @@
+"""Public workflow and evidence acceptance contract."""
+
+import asyncio
+import json
+from pathlib import Path
+
+import pytest
+
+from koala_science import Agent, ModelResponse, ReviewResult
+from koala_science.cli import initialize
+from koala_science.config import load_config
+
+
+def workspace(tmp_path: Path) -> Path:
+    initialize(tmp_path)
+    config = tmp_path / "agent.yaml"
+    config.write_text(
+        "schema_version: 1\nname: test\ninstruction_file: instructions.md\nmodel:\n  provider: compatible_api\n  name: test\n  base_url: http://localhost:1234/v1\n",
+        encoding="utf-8",
+    )
+    return config
+
+
+class FakeProvider:
+    def __init__(self, fabricated: bool = False):
+        self.calls = 0
+        self.fabricated = fabricated
+
+    async def generate(self, request):
+        self.calls += 1
+        payload = json.loads(request.messages[-1].content)
+        if payload["stage"] == "proposal":
+            span = payload["spans"][-1]
+            evidence = {
+                "source_id": span["source_id"],
+                "span_id": span["id"],
+                "page": span["page"],
+                "line_start": span["line_start"],
+                "line_end": span["line_end"],
+                "excerpt": "invented" if self.fabricated else span["text"],
+            }
+            output = {
+                "candidates": [
+                    {
+                        "kind": "praise",
+                        "target": "evaluation",
+                        "statement": "The comparison controls the training budget.",
+                        "rationale": "Both models use the same training budget.",
+                        "evidence": [evidence],
+                        "limitations": [],
+                    }
+                ]
+            }
+        elif payload["stage"] == "duplicate":
+            output = {"duplicate": False, "reason": "Different conclusions."}
+        else:
+            output = {
+                "decision": "supported",
+                "atomic": True,
+                "reason": "The cited comparison supports this conclusion.",
+                "revision": None,
+            }
+        return ModelResponse(text=json.dumps(output), model="fake")
+
+
+def test_review_and_roundtrip(tmp_path):
+    config = workspace(tmp_path)
+    paper = tmp_path / "paper.md"
+    paper.write_text(
+        "# Results\nBoth models trained for 10 epochs.\n", encoding="utf-8"
+    )
+    result = Agent.from_config(config, provider=FakeProvider()).review(paper)
+    assert result.status == "complete"
+    assert len(result.arguments) == 1
+    result.save(tmp_path / "run")
+    restored = ReviewResult.model_validate_json(
+        (tmp_path / "run/arguments.json").read_text()
+    )
+    assert restored.arguments == result.arguments
+    assert "10 epochs" in (tmp_path / "run/arguments.md").read_text()
+    with pytest.raises(ValueError, match="empty"):
+        result.save(tmp_path / "run")
+
+
+def test_fabricated_quote_is_never_accepted(tmp_path):
+    config = workspace(tmp_path)
+    paper = tmp_path / "paper.txt"
+    paper.write_text("Both models trained for 10 epochs.", encoding="utf-8")
+    result = Agent.from_config(config, provider=FakeProvider(True)).review(paper)
+    assert result.arguments == []
+    assert result.diagnostics
+
+
+def test_init_conflict_writes_nothing(tmp_path):
+    (tmp_path / "instructions.md").write_text("mine")
+    with pytest.raises(ValueError, match="conflict"):
+        initialize(tmp_path)
+    assert list(tmp_path.iterdir()) == [tmp_path / "instructions.md"]
+
+
+def test_unknown_config_and_missing_environment(tmp_path, monkeypatch):
+    config = workspace(tmp_path)
+    with config.open("a") as f:
+        f.write("surprise: true\n")
+    with pytest.raises(ValueError):
+        load_config(config)
+    monkeypatch.delenv("KOALA_MODEL", raising=False)
+    other = tmp_path / "other"
+    initialize(other)
+    with pytest.raises(ValueError, match="KOALA_MODEL"):
+        load_config(other / "agent.yaml")
+
+
+def test_sync_method_explains_event_loop(tmp_path):
+    agent = Agent.from_config(workspace(tmp_path), provider=FakeProvider())
+
+    async def active():
+        with pytest.raises(RuntimeError, match="areview"):
+            agent.review("unused.txt")
+
+    asyncio.run(active())
