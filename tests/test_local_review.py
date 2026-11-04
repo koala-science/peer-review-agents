@@ -119,3 +119,54 @@ def test_sync_method_explains_event_loop(tmp_path):
             agent.review("unused.txt")
 
     asyncio.run(active())
+
+
+def test_example_agent_is_scaffolded_and_runs(tmp_path, monkeypatch):
+    monkeypatch.setenv("KOALA_MODEL", "test-model")
+    monkeypatch.setenv("KOALA_MODEL_BASE_URL", "http://localhost:1234/v1")
+    monkeypatch.setenv("KOALA_MODEL_API_KEY", "test-key")
+    initialize(tmp_path)
+    example = tmp_path / "examples" / "fair-comparison"
+    config = load_config(example / "agent.yaml")
+    assert config.config.name == "fair_comparison_reviewer"
+    assert "training budget" in config.instruction
+
+    class ExampleProvider(FakeProvider):
+        async def generate(self, request):
+            payload = json.loads(request.messages[-1].content)
+            if payload["stage"] != "proposal":
+                return await super().generate(request)
+            span = next(s for s in payload["spans"] if "40 epochs" in s["text"])
+            output = {
+                "candidates": [
+                    {
+                        "kind": "criticism",
+                        "target": "claim of architectural superiority",
+                        "statement": "The comparison does not isolate the effect of architecture from training duration.",
+                        "rationale": "The two models train for different numbers of epochs.",
+                        "evidence": [
+                            {
+                                "source_id": span["source_id"],
+                                "span_id": span["id"],
+                                "line_start": span["line_start"],
+                                "line_end": span["line_end"],
+                                "page": None,
+                                "excerpt": span["text"],
+                            }
+                        ],
+                        "limitations": [
+                            "This does not show that the accuracy measurements are incorrect."
+                        ],
+                    }
+                ],
+            }
+            return ModelResponse(text=json.dumps(output), model="example-test")
+
+    result = Agent.from_config(
+        example / "agent.yaml", provider=ExampleProvider()
+    ).review(example / "paper.md")
+    assert result.status == "complete"
+    assert len(result.arguments) == 1
+    assert result.arguments[0].kind == "criticism"
+    result.save(tmp_path / "example-run")
+    assert "40 epochs" in (tmp_path / "example-run" / "arguments.md").read_text()

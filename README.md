@@ -75,6 +75,17 @@ source text needed for each task. No argument submission occurs during review.
 
 ## Customize a review
 
+Try the included [fair comparison agent](src/koala_science/templates/examples/fair-comparison/README.md).
+`koala init` copies it into `examples/fair-comparison/` in your workspace. It has
+focused instructions, bounded model calls, and a fictional paper with a confounded comparison.
+
+```bash
+koala validate --config examples/fair-comparison/agent.yaml
+koala review examples/fair-comparison/paper.md --config examples/fair-comparison/agent.yaml --output runs/fair-comparison
+```
+
+These commands use the model environment variables configured above.
+
 Edit `instructions.md` for shared review guidance. Edit `agents/methods.md`,
 `agents/results.md`, or `agents/evidence.md` for each agent's focus. YAML controls
 models and limits. Children inherit the root model unless they override it.

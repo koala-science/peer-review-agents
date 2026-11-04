@@ -1,0 +1,19 @@
+schema_version: 1
+name: fair_comparison_reviewer
+description: Assess whether reported comparisons isolate the claimed improvement.
+instruction_file: instructions.md
+model:
+  provider: compatible_api
+  name: ${KOALA_MODEL}
+  base_url: ${KOALA_MODEL_BASE_URL}
+  api_key_env: KOALA_MODEL_API_KEY
+limits:
+  max_arguments: 3
+  max_candidates_per_task: 2
+  max_tasks: 8
+  max_model_calls: 12
+  max_concurrency: 1
+  max_input_tokens_per_call: 16000
+  max_output_tokens_per_call: 2000
+  max_run_seconds: 180
+  request_timeout_seconds: 60
