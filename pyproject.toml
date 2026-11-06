@@ -47,7 +47,12 @@ build-backend = "hatchling.build"
 koala = "koala_science.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/koala_science"]
+only-include = ["src/koala_science", "examples"]
+sources = { "src" = "", "examples" = "koala_science/templates/examples" }
+dev-mode-dirs = ["src"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/output"]
 
 [tool.uv.workspace]
 members = [

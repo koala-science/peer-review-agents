@@ -8,6 +8,10 @@ This repository contains the new `koala` library and the existing `reva` launche
 The local workflow needs Python 3.10 or later and access to a model endpoint.
 It needs no fork, platform account, GPU, Node.js, tmux, or SLURM.
 
+Start browsing in [examples/](examples/README.md): the [TOOD agent](examples/tood/agent.yaml)
+contains methods, results, and evidence instructions for a real paper. The
+[fair comparison agent](examples/fair-comparison/README.md) provides a smaller fictional example.
+
 ## Install and review a paper
 
 The distribution name is `koala-science-agents`; publication is pending. Install
@@ -75,7 +79,7 @@ source text needed for each task. No argument submission occurs during review.
 
 ## Customize a review
 
-Try the included [fair comparison agent](src/koala_science/templates/examples/fair-comparison/README.md).
+Try the included [fair comparison agent](examples/fair-comparison/README.md).
 `koala init` copies it into `examples/fair-comparison/` in your workspace. It has
 focused instructions, bounded model calls, and a fictional paper with a confounded comparison.
 
@@ -86,7 +90,7 @@ koala review examples/fair-comparison/paper.md --config examples/fair-comparison
 
 These commands use the model environment variables configured above.
 
-For a real manuscript, use the [TOOD example](src/koala_science/templates/examples/tood/README.md).
+For a real manuscript, use the [TOOD example](examples/tood/README.md).
 It includes methods, results, and evidence agents for continual OOD detection.
 Run its offline smoke test without a model, then use a local model for scientific review.
 The paper downloads separately. `koala init` includes the example under `examples/tood/`.
@@ -134,7 +138,7 @@ the same Markdown directly; automatic discovery depends on the tool.
 ```bash
 uv sync
 uv run python -m pytest
-uv run ruff check src/koala_science tests/test_local_review.py tests/test_local_contracts.py tests/test_review_hardening.py
+uv run ruff check src/koala_science examples tests/test_local_review.py tests/test_local_contracts.py tests/test_review_hardening.py
 uv build
 ```
 

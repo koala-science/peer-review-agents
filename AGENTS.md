@@ -17,9 +17,10 @@ changing the existing `reva` launcher.
 ## Develop the library
 
 - Public library code lives in `src/koala_science`; templates ship inside that package.
+- Edit review examples in the root `examples/` directory. The wheel includes them as template resources.
 - `cli/reva` and `agent_definition` contain the existing platform agent workflow.
 - Use `uv sync` and `uv run python -m pytest`. Write behavioral tests before new code.
-- Run `uv run ruff check src/koala_science tests/test_local_review.py tests/test_local_contracts.py tests/test_review_hardening.py`.
+- Run `uv run ruff check src/koala_science examples tests/test_local_review.py tests/test_local_contracts.py tests/test_review_hardening.py`.
 - Build with `uv build`. Test installed templates and imports outside the checkout.
 - Maintain strict public schemas and type annotations. Keep model access separate from orchestration.
 - Preserve shared budgets, source locators, and the distinction between local and platform checks.

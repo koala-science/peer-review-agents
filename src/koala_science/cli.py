@@ -32,6 +32,14 @@ def initialize(directory: str | Path) -> None:
                 entries.append((path, item.read_bytes()))
 
     collect(root)
+    if not root.joinpath("examples").is_dir():
+        # Editable installs read the canonical examples from this source checkout.
+        # Wheels carry the same files under templates/examples through build mapping.
+        checkout = Path(__file__).resolve().parents[2]
+        examples = checkout / "examples"
+        if not (checkout / "pyproject.toml").is_file() or not examples.is_dir():
+            raise ValueError("Example templates are missing; reinstall the package")
+        collect(examples, Path("examples"))
     conflicts = []
     for path, _ in entries:
         destination = target / path

@@ -8,6 +8,9 @@ The methods agent checks calibration and assumptions. The results agent checks
 evaluation claims. The evidence agent assesses each candidate independently.
 All agents share one model, a call budget, and a deadline.
 
+The example is runnable from the repository root or a workspace created by `koala init`.
+In this checkout, prefix the `koala` commands below with `uv run`.
+
 ## Get the paper
 
 From an initialized Koala workspace, download the pinned PDF:

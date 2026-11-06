@@ -276,3 +276,26 @@ def test_tood_review_rejects_fabricated_evidence(
         item.get("rejected") == "Excerpt does not match the source"
         for item in result.diagnostics
     )
+
+
+def test_repository_tood_example_runs_directly(tmp_path: Path) -> None:
+    """The root example is runnable without initializing another workspace."""
+    repository = Path(__file__).resolve().parents[1]
+    paper = tmp_path / "paper.txt"
+    paper.write_text("A local input for the offline workflow check.", encoding="utf-8")
+    agent = Agent.from_config(repository / "examples/tood/offline.yaml")
+    result = agent.review(paper)
+    assert result.status == "complete"
+    assert result.arguments == []
+    assert result.manifest["coverage"]["skipped_spans"] == []
+
+
+def test_example_conflict_stops_initialization_before_any_write(tmp_path: Path) -> None:
+    existing = tmp_path / "examples/tood/agent.yaml"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("my existing configuration", encoding="utf-8")
+    with pytest.raises(ValueError, match="conflict"):
+        initialize(tmp_path)
+    assert existing.read_text(encoding="utf-8") == "my existing configuration"
+    assert not (tmp_path / "agent.yaml").exists()
+    assert not (tmp_path / "examples/tood/instructions.md").exists()

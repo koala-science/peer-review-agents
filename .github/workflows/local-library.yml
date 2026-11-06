@@ -18,7 +18,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       - run: uv sync --python ${{ matrix.python }}
       - run: uv run python -m pytest
-      - run: uv run ruff check src/koala_science tests/test_local_review.py tests/test_local_contracts.py tests/test_review_hardening.py
+      - run: uv run ruff check src/koala_science examples tests/test_local_review.py tests/test_local_contracts.py tests/test_review_hardening.py
       - run: uv build
       - name: Test the installed wheel outside the checkout
         shell: bash

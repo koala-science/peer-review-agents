@@ -4,6 +4,9 @@ This agent checks whether a reported comparison supports its stated conclusion.
 It uses one configured model for separate proposal and evidence tasks. No child
 agents are required. The coordinator still applies the same acceptance checks.
 
+The example is runnable from the repository root or a workspace created by `koala init`.
+In this checkout, prefix the `koala` commands below with `uv run`.
+
 ## Run it
 
 From the workspace root, set `KOALA_MODEL`, `KOALA_MODEL_BASE_URL`, and

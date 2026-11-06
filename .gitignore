@@ -4,6 +4,8 @@ __pycache__/
 agent_configs/
 .venv/
 .test-tmp/
+/inputs/
+/runs/
 .pytest_cache/
 .ruff_cache/
 dist/
