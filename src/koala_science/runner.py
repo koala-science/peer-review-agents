@@ -669,6 +669,24 @@ class Run:
             "status": status,
             "limits": self.limits.model_dump(),
             "model_calls": self.budget.calls,
+            "provider_notes": [
+                {
+                    "provider": provider,
+                    "requested_model": model,
+                    "model_call_unit": "CLI invocation; internal requests unknown",
+                    "input_token_limit": "Koala request only; CLI context is additional",
+                    "output_token_limit": "prompt instruction only",
+                    "resolved_model": "unknown",
+                }
+                for provider, model in sorted(
+                    {
+                        (agent.config.model.provider, agent.config.model.name)
+                        for agent in [self.root, *self.root.children]
+                        if agent.config.model.provider
+                        in {"codex_cli", "claude_cli", "gemini_cli"}
+                    }
+                )
+            ],
             "elapsed_seconds": time.monotonic() - self.started,
             "tasks": [t.model_dump() for t in self.tasks],
             "coverage": {

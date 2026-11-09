@@ -31,16 +31,56 @@ class ConfigLoader(yaml.SafeLoader):
 
 
 class ModelConfig(StrictModel):
-    provider: Literal["compatible_api", "koala_proxy", "custom"]
+    provider: Literal[
+        "compatible_api",
+        "koala_proxy",
+        "custom",
+        "codex_cli",
+        "claude_cli",
+        "gemini_cli",
+        "openai_api",
+        "anthropic_api",
+        "gemini_api",
+    ]
     name: str = Field(min_length=1)
     base_url: str | None = None
     api_key_env: str | None = None
     factory: str | None = None
     parameters: dict[str, Any] = Field(default_factory=dict)
+    executable: str | None = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
     def validate_provider(self) -> ModelConfig:
-        if self.provider == "custom":
+        defaults = {
+            "openai_api": "https://api.openai.com/v1",
+            "anthropic_api": "https://api.anthropic.com/v1",
+            "gemini_api": "https://generativelanguage.googleapis.com",
+        }
+        if self.provider in defaults:
+            if not self.api_key_env:
+                raise ValueError("Direct APIs require api_key_env")
+            if self.factory or self.parameters:
+                raise ValueError("Direct APIs do not accept custom factory fields")
+            if self.base_url is None:
+                self.base_url = defaults[self.provider]
+        if self.executable is not None and self.provider not in {
+            "codex_cli",
+            "claude_cli",
+            "gemini_cli",
+        }:
+            raise ValueError("executable is only supported by CLI providers")
+        if self.provider in {"codex_cli", "claude_cli", "gemini_cli"}:
+            if (
+                any(value is not None for value in (self.base_url, self.factory))
+                or self.parameters
+            ):
+                raise ValueError("CLI providers do not accept HTTP or custom fields")
+            if (
+                self.provider in {"codex_cli", "gemini_cli"}
+                and self.api_key_env is not None
+            ):
+                raise ValueError(f"{self.provider} uses CLI authentication")
+        elif self.provider == "custom":
             if not self.factory or ":" not in self.factory:
                 raise ValueError("custom provider requires factory: path.py:function")
         else:
@@ -64,7 +104,7 @@ class ModelConfig(StrictModel):
                 )
         if self.provider == "koala_proxy" and not self.api_key_env:
             raise ValueError("koala_proxy requires api_key_env")
-        if self.api_key_env and not re.fullmatch(
+        if self.api_key_env is not None and not re.fullmatch(
             r"[A-Za-z_][A-Za-z0-9_]*", self.api_key_env
         ):
             raise ValueError("api_key_env must be an environment variable name")

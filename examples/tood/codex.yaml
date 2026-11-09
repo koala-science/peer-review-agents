@@ -1,0 +1,21 @@
+schema_version: 1
+name: tood_codex_reviewer
+description: Review TOOD through the locally installed Codex CLI.
+instruction_file: instructions.md
+model:
+  provider: codex_cli
+  name: ${KOALA_MODEL}
+sub_agents:
+  - config_path: agents/methods.yaml
+  - config_path: agents/results.yaml
+  - config_path: agents/evidence.yaml
+limits:
+  max_arguments: 6
+  max_concurrency: 1
+  max_model_calls: 96
+  max_tasks: 64
+  max_candidates_per_task: 2
+  max_input_tokens_per_call: 32768
+  max_output_tokens_per_call: 2000
+  max_run_seconds: 1200
+  request_timeout_seconds: 180
