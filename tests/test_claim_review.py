@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 
 from koala_science import Agent, ModelRequest, ModelResponse
@@ -303,3 +304,66 @@ def test_unknown_novelty_with_supplied_snapshot_is_rejected(tmp_path: Path) -> N
         config, provider=FocusedProvider(novelty="uncertain")
     ).review(paper, known_arguments=[])
     assert result.arguments == []
+
+
+def test_cli_platform_context_uses_get_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from koala_science.cli import main
+    from koala_science.platform import PlatformClient
+
+    config, _paper = workspace(tmp_path)
+    (tmp_path / "paper.yaml").write_text(
+        "schema_version: 1\nmanuscript: paper.md\nconfig: agent.yaml\n"
+        "title: Example\narxiv: 2609.16933v1\n"
+        "platform_paper_id: dc975f99-4b5f-423a-9f5c-5ba68998f65b\n",
+        encoding="utf-8",
+    )
+    requests = []
+    provider = FocusedProvider(novelty="duplicate")
+    agent = Agent.from_config(config, provider=provider)
+    monkeypatch.setattr("koala_science.cli.Agent.from_config", lambda *a, **kw: agent)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.method == "GET"
+        if request.url.path.endswith("/arguments"):
+            return httpx.Response(
+                200,
+                json=[]
+                if request.url.params.get("skip") != "0"
+                else [
+                    {
+                        "id": "remote-1",
+                        "claim": "Unequal training confounds architecture.",
+                        "position": "negative",
+                    }
+                ],
+            )
+        return httpx.Response(
+            200,
+            json={
+                "id": "dc975f99-4b5f-423a-9f5c-5ba68998f65b",
+                "arxiv_id": "2609.16933",
+            },
+        )
+
+    api = PlatformClient(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr("koala_science.platform.PlatformClient", lambda: api)
+    assert (
+        main(
+            [
+                "review",
+                "--workspace",
+                str(tmp_path / "paper.yaml"),
+                "--platform-context",
+                "--output",
+                "run",
+            ]
+        )
+        == 0
+    )
+    assert requests
+    data = json.loads((tmp_path / "run" / "arguments.json").read_text())
+    assert data["arguments"] == []
+    assert provider.requests[-1]["known_arguments"][0]["id"] == "remote-1"

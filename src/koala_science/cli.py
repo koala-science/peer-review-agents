@@ -5,93 +5,150 @@ import asyncio
 import json
 import os
 import sys
-from importlib.resources import files
+import uuid
 from pathlib import Path
-from typing import Any
 
 from pydantic import ValidationError
 
 from .config import load_config
+from .platform import PlatformError
 from .runner import Agent
-
-
-def initialize(directory: str | Path) -> None:
-    """Scaffold a workspace after checking every destination for conflicts."""
-    target = Path(directory)
-    root = files("koala_science").joinpath("templates")
-    entries = []
-
-    def collect(node: Any, relative: Path = Path()) -> None:
-        for item in node.iterdir():
-            if item.name == "__pycache__" or item.name.endswith(".pyc"):
-                continue
-            path = relative / item.name
-            if item.is_dir():
-                collect(item, path)
-            else:
-                entries.append((path, item.read_bytes()))
-
-    collect(root)
-    if not root.joinpath("examples").is_dir():
-        # Editable installs read the canonical examples from this source checkout.
-        # Wheels carry the same files under templates/examples through build mapping.
-        checkout = Path(__file__).resolve().parents[2]
-        examples = checkout / "examples"
-        if not (checkout / "pyproject.toml").is_file() or not examples.is_dir():
-            raise ValueError("Example templates are missing; reinstall the package")
-        collect(examples, Path("examples"))
-    conflicts = []
-    for path, _ in entries:
-        destination = target / path
-        if (
-            destination.exists()
-            or destination.is_symlink()
-            or any(p.exists() and not p.is_dir() for p in destination.parents)
-            or any(
-                p.is_symlink()
-                for p in destination.parents
-                if p != target and p.is_relative_to(target)
-            )
-        ):
-            conflicts.append(str(path))
-    if conflicts:
-        raise ValueError("Initialization conflict: " + ", ".join(conflicts))
-    for path, content in entries:
-        destination = target / path
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with destination.open("xb") as handle:
-            handle.write(content)
+from .scaffold import INIT_PROVIDERS, initialize, setup_choices
+from .workspace import PaperWorkspace
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="koala", description="Review local papers with inspectable evidence"
     )
-    parser.add_argument("--config", default="agent.yaml")
+    parser.add_argument("--config", default=None)
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init")
     init.add_argument("directory", nargs="?", default=".")
+    init.add_argument(
+        "--examples",
+        action="store_true",
+        help="Include optional examples and extension templates",
+    )
+    init.add_argument(
+        "--provider",
+        choices=INIT_PROVIDERS,
+        help="Model provider for the starter agent",
+    )
+    init.add_argument(
+        "--preset",
+        choices=("quick", "default"),
+        help="Starting review breadth and budget",
+    )
     validate = commands.add_parser("validate")
     validate.add_argument("--config", default=argparse.SUPPRESS)
+    validate.add_argument("--workspace", default="paper.yaml")
     review = commands.add_parser("review")
-    review.add_argument("paper")
+    review.add_argument("paper", nargs="?")
     review.add_argument("--config", default=argparse.SUPPRESS)
     review.add_argument("--source", action="append", default=[])
-    review.add_argument("--output", required=True)
+    review.add_argument("--output")
+    review.add_argument("--workspace", default="paper.yaml")
+    review.add_argument(
+        "--platform-context",
+        action="store_true",
+        help="Read existing public arguments for novelty checks (GET only; requires a paper workspace and claims strategy)",
+    )
+    submit_parser = commands.add_parser("submit")
+    submit_parser.add_argument("--workspace", default="paper.yaml")
+    submit_parser.add_argument("--send", action="store_true")
+    submit_parser.add_argument("--select", action="store_true")
+    submit_parser.add_argument("--run")
+    submit_parser.add_argument("--argument", action="append", default=[])
+    submit_parser.add_argument("--allow-partial", action="store_true")
+    submit_parser.add_argument("--confirm-version", action="store_true")
+    submit_parser.add_argument("--wait", type=float, nargs="?", const=60, default=0)
     args = parser.parse_args(argv)
     try:
         if args.command == "init":
-            initialize(args.directory)
+            provider, preset = setup_choices(args.provider, args.preset)
+            initialize(
+                args.directory, examples=args.examples, provider=provider, preset=preset
+            )
             print(f"Workspace created: {args.directory}")
+            print("Edit paper.yaml for your manuscript and agent.yaml for your model.")
+            print(
+                "Set KOALA_MODEL and any provider credentials, then run koala validate and koala review."
+            )
             return 0
         if args.command == "validate":
-            load_config(args.config)
+            workspace = (
+                PaperWorkspace.load(args.workspace)
+                if Path(args.workspace).exists()
+                else None
+            )
+            load_config(
+                args.config or (workspace.agent_config if workspace else "agent.yaml")
+            )
             print("Configuration is valid")
             return 0
-        agent = Agent.from_config(args.config)
-        output = Path(args.output).resolve()
+        if args.command == "submit":
+            from .submission import submit
+
+            return submit(
+                PaperWorkspace.load(args.workspace),
+                send=args.send,
+                run=args.run,
+                arguments=args.argument,
+                select=args.select,
+                allow_partial=args.allow_partial,
+                confirm_version=args.confirm_version,
+                wait=args.wait,
+            )
+        workspace = PaperWorkspace.load(args.workspace) if args.paper is None else None
+        paper = workspace.manuscript if workspace else args.paper
+        sources = (
+            [*workspace.sources, *((workspace.root / p).resolve() for p in args.source)]
+            if workspace
+            else args.source
+        )
+        agent = Agent.from_config(
+            args.config or (workspace.agent_config if workspace else "agent.yaml")
+        )
+        output = (
+            ((workspace.root if workspace else Path.cwd()) / args.output).resolve()
+            if args.output
+            else (workspace.root if workspace else Path.cwd())
+            / "runs"
+            / uuid.uuid4().hex
+        )
         if output.exists() and (not output.is_dir() or any(output.iterdir())):
             raise ValueError("Output directory must be new or empty")
+        known_arguments = None
+        if args.platform_context:
+            if workspace is None or workspace.identity is None:
+                raise ValueError(
+                    "--platform-context requires a paper workspace with an arXiv identity"
+                )
+            if agent.loaded.config.review_strategy != "claims":
+                raise ValueError("--platform-context requires review_strategy: claims")
+            from .platform import PlatformClient
+
+            print("Reading platform paper and public arguments...", flush=True)
+            with PlatformClient() as api:
+                found = api.find_paper(
+                    workspace.identity[0],
+                    workspace.config.title,
+                    workspace.config.platform_paper_id,
+                )
+                if not found:
+                    raise ValueError(
+                        "Platform paper not found; review locally without --platform-context or choose an existing paper"
+                    )
+                public = api.pages("papers/" + found["id"] + "/arguments")
+            known_arguments = [
+                {key: item.get(key) for key in ("id", "claim", "position")}
+                for item in public
+            ]
+            print(
+                f"Loaded {len(known_arguments)} public arguments for novelty checks (read-only snapshot).",
+                flush=True,
+            )
         output.parent.mkdir(parents=True, exist_ok=True)
         journal = output.parent / f".{output.name}.journal.jsonl"
         try:
@@ -103,9 +160,20 @@ def main(argv: list[str] | None = None) -> int:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(json.dumps({"status": "running"}) + "\n")
         initial_size = journal.stat().st_size
+        print(
+            f"Reviewing with {agent.loaded.config.model.provider}; "
+            f"up to {agent.loaded.config.limits.max_model_calls} model calls. "
+            "Mapping and checking evidence can take several minutes.",
+            flush=True,
+        )
         try:
             result = asyncio.run(
-                agent.areview(args.paper, sources=args.source, journal=journal)
+                agent.areview(
+                    paper,
+                    sources=sources,
+                    journal=journal,
+                    known_arguments=known_arguments,
+                )
             )
         except (ValueError, OSError):
             if journal.stat().st_size == initial_size:
@@ -113,8 +181,18 @@ def main(argv: list[str] | None = None) -> int:
             raise
         result.save(output)
         journal.unlink()
+        if workspace:
+            workspace.record_run(output, result.status)
         print(f"{output}: {len(result.arguments)} arguments ({result.status})")
+        print(
+            f"{result.manifest['model_calls']} model calls; "
+            f"{result.manifest['elapsed_seconds']:.1f} seconds. "
+            "See arguments.md for the review summary."
+        )
         return {"complete": 0, "partial": 4, "failed": 3}[result.status]
+    except PlatformError as exc:
+        print(str(exc), file=sys.stderr)
+        return 4 if exc.uncertain else 3
     except (ValueError, OSError) as exc:
         # Validation exceptions can include environment-expanded values.
         if isinstance(exc, ValidationError):

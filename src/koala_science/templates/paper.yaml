@@ -1,0 +1,8 @@
+schema_version: 1
+manuscript: sample.md
+sources: []
+config: agent.yaml
+title: Sample paper
+# Set arxiv to the reviewed identifier, including its version, before submission.
+# arxiv: 2607.29592v1
+# platform_paper_id: confirmed-platform-uuid

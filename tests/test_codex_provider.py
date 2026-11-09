@@ -180,7 +180,7 @@ def test_tood_codex_template_inherits_provider(
     from koala_science.cli import initialize
 
     monkeypatch.setenv("KOALA_MODEL", "test-model")
-    initialize(tmp_path)
+    initialize(tmp_path, examples=True)
     config = load_config(tmp_path / "examples/tood/codex.yaml")
     assert config.config.model.provider == "codex_cli"
     assert all(c.config.model == config.config.model for c in config.children)
@@ -241,7 +241,7 @@ def test_cli_manifest_discloses_codex_limits(
     from koala_science.cli import initialize, main
 
     monkeypatch.setenv("KOALA_MODEL", "test-model")
-    initialize(tmp_path / "workspace")
+    initialize(tmp_path / "workspace", examples=True)
     root = tmp_path / "workspace"
     assert main(["validate", "--config", str(root / "examples/tood/codex.yaml")]) == 0
     assert (

@@ -12,7 +12,7 @@ from koala_science.config import load_config
 
 
 def workspace(tmp_path: Path) -> Path:
-    initialize(tmp_path)
+    initialize(tmp_path, examples=True)
     config = tmp_path / "agent.yaml"
     config.write_text(
         "schema_version: 1\nname: test\ninstruction_file: instructions.md\nmodel:\n  provider: compatible_api\n  name: test\n  base_url: http://localhost:1234/v1\n",
@@ -94,7 +94,7 @@ def test_fabricated_quote_is_never_accepted(tmp_path):
 def test_init_conflict_writes_nothing(tmp_path):
     (tmp_path / "instructions.md").write_text("mine")
     with pytest.raises(ValueError, match="conflict"):
-        initialize(tmp_path)
+        initialize(tmp_path, examples=True)
     assert list(tmp_path.iterdir()) == [tmp_path / "instructions.md"]
 
 
@@ -125,7 +125,7 @@ def test_example_agent_is_scaffolded_and_runs(tmp_path, monkeypatch):
     monkeypatch.setenv("KOALA_MODEL", "test-model")
     monkeypatch.setenv("KOALA_MODEL_BASE_URL", "http://localhost:1234/v1")
     monkeypatch.setenv("KOALA_MODEL_API_KEY", "test-key")
-    initialize(tmp_path)
+    initialize(tmp_path, examples=True)
     example = tmp_path / "examples" / "fair-comparison"
     config = load_config(example / "agent.yaml")
     assert config.config.name == "fair_comparison_reviewer"
@@ -178,7 +178,7 @@ def test_tood_example_inherits_the_local_model(
     monkeypatch.setenv("KOALA_MODEL", "local-test-model")
     monkeypatch.setenv("KOALA_MODEL_BASE_URL", "http://127.0.0.1:1234/v1")
     monkeypatch.delenv("KOALA_MODEL_API_KEY", raising=False)
-    initialize(tmp_path)
+    initialize(tmp_path, examples=True)
     config = load_config(tmp_path / "examples/tood/agent.yaml")
     assert config.config.model.api_key_env is None
     assert [child.config.role for child in config.children] == [
@@ -204,7 +204,7 @@ def test_tood_offline_smoke_needs_no_model_or_network(
     monkeypatch.setattr(HTTPProvider, "generate", forbidden_request)
     for key in ["KOALA_MODEL", "KOALA_MODEL_BASE_URL", "KOALA_MODEL_API_KEY"]:
         monkeypatch.delenv(key, raising=False)
-    initialize(tmp_path)
+    initialize(tmp_path, examples=True)
     agent = Agent.from_config(tmp_path / "examples/tood/offline.yaml")
     result = agent.review(tmp_path / "sample.md")
     assert result.status == "complete"
@@ -223,7 +223,7 @@ def test_tood_review_rejects_fabricated_evidence(
 ) -> None:
     monkeypatch.setenv("KOALA_MODEL", "fixture")
     monkeypatch.setenv("KOALA_MODEL_BASE_URL", "http://127.0.0.1:1234/v1")
-    initialize(tmp_path)
+    initialize(tmp_path, examples=True)
     paper = tmp_path / "synthetic-ood-fixture.md"
     quote = "Calibration statistics use only in-distribution replay samples."
     paper.write_text(quote, encoding="utf-8")
@@ -295,7 +295,7 @@ def test_example_conflict_stops_initialization_before_any_write(tmp_path: Path) 
     existing.parent.mkdir(parents=True)
     existing.write_text("my existing configuration", encoding="utf-8")
     with pytest.raises(ValueError, match="conflict"):
-        initialize(tmp_path)
+        initialize(tmp_path, examples=True)
     assert existing.read_text(encoding="utf-8") == "my existing configuration"
     assert not (tmp_path / "agent.yaml").exists()
     assert not (tmp_path / "examples/tood/instructions.md").exists()

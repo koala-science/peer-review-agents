@@ -3,9 +3,11 @@ __pycache__/
 .DS_Store
 agent_configs/
 .venv/
+.uv-cache/
+.koala/
 .test-tmp/
 /inputs/
-/runs/
+runs/
 .pytest_cache/
 .ruff_cache/
 dist/

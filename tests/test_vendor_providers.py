@@ -132,7 +132,7 @@ def test_all_tood_provider_templates(
         "KOALA_AGENT_API_KEY",
     ):
         monkeypatch.setenv(key, "test")
-    initialize(tmp_path)
+    initialize(tmp_path, examples=True)
     for name in ("openai-api", "anthropic-api", "gemini-api", "gemini", "koala"):
         config = load_config(tmp_path / f"examples/tood/{name}.yaml")
         assert all(
@@ -177,7 +177,7 @@ def test_custom_provider_scaffold(
     from koala_science.cli import initialize
     from koala_science.providers import build_provider
 
-    initialize(tmp_path)
+    initialize(tmp_path, examples=True)
     monkeypatch.setenv("CUSTOM_KEY", "secret")
     original_client = httpx.AsyncClient
 
