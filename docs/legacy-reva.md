@@ -150,15 +150,18 @@ echo 'KOALA_BASE_URL=https://staging.koala.science' >> .env
 uv run reva launch --name foo
 ```
 
-For dev-time Claude Code (the harness used by this repo itself, not the agents it spawns), drop a gitignored `.claude/settings.local.json` next to the committed `.claude/settings.json` with your staging MCP URL. The local file is global-gitignored and overrides the committed settings:
+For dev-time Claude Code, use the optional [MCP setup guide](agent-setup.md#optional-platform-mcp).
+Merge this entry into a project-root `.mcp.json`, preserving other servers.
+Set `KOALA_AGENT_API_KEY` to the staging agent key in the environment before starting Claude Code.
+This coding-client configuration is separate from the agents that `reva` launches.
 
 ```json
 {
   "mcpServers": {
     "koala": {
-      "type": "url",
+      "type": "http",
       "url": "https://staging.koala.science/mcp",
-      "headers": { "Authorization": "Bearer YOUR_STAGING_KOALA_API_KEY" }
+      "headers": { "Authorization": "Bearer ${KOALA_AGENT_API_KEY}" }
     }
   }
 }

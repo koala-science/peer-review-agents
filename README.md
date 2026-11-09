@@ -1,152 +1,162 @@
 # Koala review agents
 
 Turn a local paper into atomic criticisms and praise with inspectable evidence.
-Koala saves JSON, Markdown, source snapshots, and diagnostics on your machine.
+Koala saves reports, source snapshots, and diagnostics on your machine.
 Local review does not submit arguments to the Koala platform.
 
-This repository contains the new `koala` library and the existing `reva` launcher.
-The local workflow needs Python 3.10 or later and access to a model endpoint.
-It needs no fork, platform account, GPU, Node.js, tmux, or SLURM.
+## Prerequisites
 
-Start browsing in [examples/](examples/README.md): the [TOOD agent](examples/tood/agent.yaml)
-contains methods, results, and evidence instructions for a real paper. The
-[fair comparison agent](examples/fair-comparison/README.md) provides a smaller fictional example.
+Use Python 3.10 or later, uv, and your chosen model provider.
+CLI providers need an installed CLI and login. API providers need an endpoint and credentials.
+Local review needs no fork, platform account, GPU, Node.js, tmux, or SLURM.
+Your chosen CLI can have its own installation requirements.
 
 ## Install and review a paper
 
-The distribution name is `koala-science-agents`; publication is pending. Install
-this checkout with uv, then create a workspace outside the repository:
+The distribution name is `koala-science-agents`. Publication is pending. Install from this checkout.
+Run these commands **from the repository root** in PowerShell or Bash:
 
-```bash
+```sh
 uv tool install .
 koala init ../my-review
 cd ../my-review
 ```
 
-Set the environment variables referenced by `agent.yaml`. The default provider
-requires a chat-completions endpoint with JSON-schema output support.
+Choose your provider and access mode from the numbered menus. Choose **Quick** for a first review.
+Quick examines one claim with up to six calls and four minutes.
+Default examines two claims with up to ten calls and six minutes. Neither guarantees an accepted argument.
+Initialization never overwrites existing files. It does not test credentials or spend model credit.
+
+For unattended setup, pass both choices: `koala init ../my-review --provider PROVIDER --preset quick`.
+Replace `PROVIDER` with a name from the table below.
+If you need bundled examples or extension templates, add `--examples` at initialization.
+
+All remaining quickstart commands run **from the new workspace**.
+Set an explicit model available to your account:
 
 PowerShell:
 
 ```powershell
 $env:KOALA_MODEL = 'your-model'
-$env:KOALA_MODEL_BASE_URL = 'https://your-provider.example/v1'
-$env:KOALA_MODEL_API_KEY = 'your-key'
 ```
 
-macOS or Linux:
+Bash:
 
 ```bash
 export KOALA_MODEL='your-model'
-export KOALA_MODEL_BASE_URL='https://your-provider.example/v1'
-export KOALA_MODEL_API_KEY='your-key'
 ```
 
-Use your actual endpoint and credentials. For an unauthenticated local endpoint,
-remove `api_key_env` from the model block. Koala does not load `.env` files.
+Set the credentials for the provider you selected. Keep keys in environment variables, never YAML, prompts, recordings, or Git.
 
-```bash
-koala validate
-koala review sample.md --output runs/first
-koala review paper.pdf --source supplement.md --output runs/paper
-```
+| Provider | Required access |
+| --- | --- |
+| `codex_cli`, `claude_cli`, `gemini_cli` | Installed CLI login |
+| `openai_api` | `OPENAI_API_KEY` |
+| `anthropic_api` | `ANTHROPIC_API_KEY` |
+| `gemini_api` | `GEMINI_API_KEY` |
+| `koala_proxy` | `KOALA_AGENT_API_KEY` and owner model credit |
+| `compatible_api` | `KOALA_MODEL_BASE_URL` and `KOALA_MODEL_API_KEY` |
 
-Choose a new or empty output directory. Inspect `arguments.md`, then check the
-quoted spans in `sources.json`. `diagnostics.json` explains rejected candidates.
-`manifest.json` records tasks, coverage, limits, model identifiers, and usage.
+Use the [provider guide](docs/providers.md#credentials-and-endpoints) for hidden key entry, compatible endpoints, and login details.
+Koala does not load `.env` files. Remote providers, including hosted CLI models, receive the supplied review text.
 
-`complete` can mean zero accepted arguments. `partial` preserves checked results
-but records missing work. Exit codes are 0 for complete, 2 for input/config errors,
-3 for runtime failure, and 4 for partial results. Scanned PDFs need a text version.
-
-## Use Koala's funded model proxy
-
-Replace the model block in `agent.yaml`:
+Copy your manuscript into the workspace. Edit the generated `paper.yaml`:
 
 ```yaml
-model:
-  provider: koala_proxy
-  name: ${KOALA_MODEL}
-  base_url: https://koala.science/llm
-  api_key_env: KOALA_AGENT_API_KEY
+schema_version: 1
+manuscript: inputs/paper.pdf
+sources: []
+config: agent.yaml
+title: Your paper title
 ```
 
-Set `KOALA_AGENT_API_KEY` to your owner-provisioned agent key. Set `KOALA_MODEL`
-to a model allowed by that server. The inspected backend allows `gemini-3.5-flash`;
-the server remains authoritative. This provider uses Gemini's request format.
-The server enforces model credit and access limits. Remote providers receive the
-source text needed for each task. No argument submission occurs during review.
+Replace `inputs/paper.pdf` with your actual PDF, Markdown, or text file.
+Paths resolve relative to `paper.yaml`. Scanned PDFs need a text version.
+List supplements in `sources`, or supply them explicitly with `--source inputs/supplement.md` during review.
+Links and bibliography entries do not fetch supporting evidence.
 
-## Customize a review
+Validate the configuration, then run the review:
 
-Try the included [fair comparison agent](examples/fair-comparison/README.md).
-`koala init` copies it into `examples/fair-comparison/` in your workspace. It has
-focused instructions, bounded model calls, and a fictional paper with a confounded comparison.
+```sh
+koala validate
+koala review --output runs/first
+```
+
+Validation does not test live authentication, credit, model compatibility, or manuscript extraction.
+Review calls can incur charges. Use a new or empty output directory for each run.
+Without `--output`, a workspace review creates a unique directory under `runs/`.
+
+Inspect the report in PowerShell:
+
+```powershell
+Get-Content runs/first/arguments.md
+```
+
+Or in Bash:
 
 ```bash
-koala validate --config examples/fair-comparison/agent.yaml
-koala review examples/fair-comparison/paper.md --config examples/fair-comparison/agent.yaml --output runs/fair-comparison
+cat runs/first/arguments.md
 ```
 
-These commands use the model environment variables configured above.
+Check quotations in `sources.json`, rejections in `diagnostics.json`, and coverage and usage in `manifest.json`.
+`arguments.json` contains the full local argument records. These artifacts include manuscript excerpts. Review them before sharing.
+`complete` can mean zero accepted arguments. `partial` preserves checked results but records missing work.
+Neither status proves that every scientific claim was verified. See [troubleshooting](docs/troubleshooting.md) for exit codes and recovery.
 
-For a real manuscript, use the [TOOD example](examples/tood/README.md).
-It includes methods, results, and evidence agents for continual OOD detection.
-Run its offline smoke test without a model, then use a local model for scientific review.
-The paper downloads separately. `koala init` includes the example under `examples/tood/`.
+## Next steps
 
-Edit `instructions.md` for shared review guidance. Edit `agents/methods.md`,
-`agents/results.md`, or `agents/evidence.md` for each agent's focus. YAML controls
-models and limits. Children inherit the root model unless they override it.
+Start with the [documentation index](docs/README.md) for tutorials, examples, and technical references.
+Existing README anchors below point to their detailed guides.
 
-Use `--config path/to/agent.yaml` to select another config. Paths inside each YAML
-file resolve relative to that file. Koala never searches parent directories.
+### Use Koala's funded model proxy
 
-The scaffold includes custom API and Python backend examples in `providers/`.
-See [the library guide](docs/library.md) for their contracts and limitations.
+See [platform model credit](docs/providers.md#use-koalas-funded-model-proxy).
 
-## Python API
+### Review with your installed Codex CLI
 
-Install the checkout in your Python project with `uv add /path/to/peer-review-agents`.
+See [Codex setup](docs/providers.md#review-with-your-installed-codex-cli).
 
-```python
-import koala_science as koala
+### Review with your installed Claude CLI
 
-agent = koala.Agent.from_config("agent.yaml")
-result = agent.review("paper.pdf", sources=["supplement.md"])
-result.save("runs/first")
-for argument in result.arguments:
-    print(argument.statement)
-```
+See [Claude setup](docs/providers.md#review-with-your-installed-claude-cli).
 
-Inside notebooks or another event loop, use `await agent.areview("paper.pdf")`.
+### Use a paper workspace and submit selected arguments
 
-## Start with an AI coding agent
+See [platform submission](docs/platform-submission.md). Only `koala submit --send` sends arguments. Submissions are immutable and consume credit.
 
-Give your agent this instruction:
+### Customize a review
 
-> Read AGENTS.md and the README. Help me initialize a separate Koala workspace,
-> configure my selected model provider, validate it, and review my supplied paper.
-> Inspect the outputs and report the artifact paths and incomplete coverage.
+See [review guidance](docs/reviews.md).
 
-`AGENTS.md` is the shared repository guide. `CLAUDE.md` points Claude Code to it.
-The `.claude/skills/koala-review` skill guides local reviews. Other tools can read
-the same Markdown directly; automatic discovery depends on the tool.
+#### Keep a review fast and useful
 
-## Develop and test
+See [presets and quality checks](docs/reviews.md#keep-a-review-fast-and-useful).
 
-```bash
-uv sync
-uv run python -m pytest
-uv run ruff check src/koala_science examples tests/test_local_review.py tests/test_local_contracts.py tests/test_review_hardening.py
-uv build
-```
+#### Choose a provider
 
-Tests use fake providers and mock HTTP. They do not spend model credit. See
-[release validation](docs/release-validation.md) for remaining release gates.
+See [providers](docs/providers.md).
 
-## Existing platform agents
+#### Add a custom provider
 
-`reva` remains available through `uv run reva`. Fork requirements, platform keys,
-tmux, SLURM, and legacy `.env` loading apply to that launcher. See
-[the legacy guide](docs/legacy-reva.md) and [migration notes](docs/migration.md).
+See [custom providers](docs/providers.md#add-a-custom-provider).
+
+#### Read and export the results
+
+See [artifacts and exports](docs/platform-submission.md#exported-payloads).
+
+### Python API
+
+See [Python usage](docs/development.md#python-api) and [library contracts](docs/library.md).
+
+### Start with an AI coding agent
+
+Use the [onboarding prompt](docs/agent-setup.md#reusable-onboarding-prompt) and shared [AGENTS.md](AGENTS.md).
+
+### Develop and test
+
+See [development commands](docs/development.md) and [release validation](docs/release-validation.md).
+
+### Existing platform agents
+
+The existing `reva` launcher remains available through `uv run reva`.
+See the [legacy guide](docs/legacy-reva.md) and [migration notes](docs/migration.md).
