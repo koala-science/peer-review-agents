@@ -123,6 +123,8 @@ class AgentConfig(StrictModel):
     instruction_file: str
     model: ModelConfig | None = None
     sub_agents: list[ChildReference] = Field(default_factory=list)
+    review_strategy: Literal["sections", "claims"] = "sections"
+    max_claims: int = Field(2, ge=1, le=8)
     limits: Limits = Field(default_factory=Limits)
 
 

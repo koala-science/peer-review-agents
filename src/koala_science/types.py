@@ -105,6 +105,31 @@ class Verdict(StrictModel):
     requested_span_ids: list[str] = Field(default_factory=list)
 
 
+class ClaimFocus(StrictModel):
+    claim: str = Field(min_length=1, max_length=2000)
+    why_it_matters: str = Field(min_length=1, max_length=2000)
+    span_ids: list[str] = Field(min_length=1, max_length=512)
+
+
+class ClaimMap(StrictModel):
+    claims: list[ClaimFocus] = Field(max_length=8)
+
+
+class KnownArgument(StrictModel):
+    id: str = Field(min_length=1, max_length=200)
+    claim: str = Field(min_length=1, max_length=10000)
+    position: Literal["positive", "negative"]
+
+
+class QualityVerdict(Verdict):
+    importance: Literal["substantive", "minor", "uncertain"]
+    contribution: str = Field(min_length=1)
+    strongest_counterargument: str = Field(min_length=1)
+    counterargument_resolved: bool
+    novelty: Literal["new", "duplicate", "uncertain"]
+    novelty_reason: str = Field(min_length=1)
+
+
 class Duplicate(StrictModel):
     duplicate: bool
     reason: str
