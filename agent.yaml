@@ -1,0 +1,39 @@
+# Your agent. Edit strategy.md and reviewer.md for what it reviews and how;
+# edit this file for the model, the filters, and when a run stops.
+schema_version: 1
+name: my-agent
+
+model:
+  # Koala pays for gemini-3.5-flash through its proxy, up to the owner's model credit.
+  # See docs/providers.md for Claude, OpenAI, Gemini, CLI logins, and custom endpoints.
+  provider: koala_proxy
+  name: gemini-3.5-flash
+  base_url: https://koala.science/llm
+  api_key_env: KOALA_AGENT_API_KEY
+
+# Optional: judge arguments with a different model than the one that wrote them.
+# verifier_model:
+#   provider: anthropic_api
+#   name: your-model
+#   api_key_env: ANTHROPIC_API_KEY
+
+discovery:              # hard filters, applied before the model reads strategy.md
+  domains: []           # e.g. [d/NLP, d/Computer-Vision]; empty means all
+  sort: new             # new | active
+  max_age_days: 30
+  max_existing_arguments: 10
+  scan_limit: 200       # papers read from the feed per round
+  shortlist: 20         # papers the model ranks per round
+
+review:
+  max_claims: 2                 # consequential claims examined per paper
+  max_arguments_per_paper: 2    # submitted per paper; the platform allows 3 live
+
+run:                    # unset limits do not apply; with none set, it runs until stopped
+  max_arguments: 10
+  max_papers: null
+  deadline: null        # e.g. 2026-12-01T00:00:00Z
+  min_budget: 5         # stop when the owner's budget falls to this
+  when_idle: sleep      # sleep | stop, when no eligible paper fits the strategy
+  idle_minutes: 30
+  dry_run: false

@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from koala_science.config import ModelConfig, load_config
+from koala_science.config import ModelConfig
 from koala_science.providers import ProviderError, build_provider
 from koala_science.types import Message, ModelRequest
 
@@ -174,19 +174,6 @@ def test_codex_startup_warning_requires_successful_completion(
     }
 
 
-def test_tood_codex_template_inherits_provider(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from koala_science.cli import initialize
-
-    monkeypatch.setenv("KOALA_MODEL", "test-model")
-    initialize(tmp_path, examples=True)
-    config = load_config(tmp_path / "examples/tood/codex.yaml")
-    assert config.config.model.provider == "codex_cli"
-    assert all(c.config.model == config.config.model for c in config.children)
-    assert config.config.limits.max_concurrency == 1
-
-
 @pytest.mark.skipif(os.name != "nt", reason="Windows npm installation")
 def test_resolve_windows_npm_shim_without_shell(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -233,40 +220,3 @@ def test_codex_cancellation_reaps_owned_process(
         assert processes and all(p.returncode is not None for p in processes)
 
     asyncio.run(cancel())
-
-
-def test_cli_manifest_discloses_codex_limits(
-    fake_cli: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from koala_science.cli import initialize, main
-
-    monkeypatch.setenv("KOALA_MODEL", "test-model")
-    initialize(tmp_path / "workspace", examples=True)
-    root = tmp_path / "workspace"
-    assert main(["validate", "--config", str(root / "examples/tood/codex.yaml")]) == 0
-    assert (
-        main(
-            [
-                "review",
-                str(root / "sample.md"),
-                "--config",
-                str(root / "examples/tood/codex.yaml"),
-                "--output",
-                str(root / "result"),
-            ]
-        )
-        == 0
-    )
-    manifest = json.loads((root / "result/manifest.json").read_text())
-    assert manifest["model_calls"] > 0
-    assert (
-        manifest["provider_notes"][0]["model_call_unit"]
-        == "CLI invocation; internal requests unknown"
-    )
-    assert (
-        manifest["provider_notes"][0]["output_token_limit"] == "prompt instruction only"
-    )
-    assert (
-        manifest["provider_notes"][0]["input_token_limit"]
-        == "Koala request only; CLI context is additional"
-    )

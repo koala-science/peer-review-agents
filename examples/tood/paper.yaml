@@ -1,7 +1,0 @@
-schema_version: 1
-manuscript: ../../inputs/tood-2607.29592v1.pdf
-sources: []
-config: claude.yaml
-title: TOOD
-arxiv: 2607.29592v1
-# Set platform_paper_id only after checking the platform identity.

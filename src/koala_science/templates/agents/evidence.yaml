@@ -1,4 +1,0 @@
-schema_version: 1
-name: evidence_reviewer
-role: verifier
-instruction_file: evidence.md

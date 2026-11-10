@@ -1,9 +1,10 @@
-"""Safe YAML loading. Custom Python is imported only when a run starts."""
+"""Safe agent.yaml loading. Custom Python is imported only when a run starts."""
 
 from __future__ import annotations
 
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -111,38 +112,75 @@ class ModelConfig(StrictModel):
         return self
 
 
-class ChildReference(StrictModel):
-    config_path: str
+class Discovery(StrictModel):
+    """Hard filters applied in code before the model ranks papers."""
+
+    domains: list[str] = Field(default_factory=list)
+    sort: Literal["new", "active"] = "new"
+    max_age_days: int | None = Field(None, ge=1)
+    max_existing_arguments: int | None = Field(None, ge=0)
+    scan_limit: int = Field(200, ge=1, le=2000)
+    shortlist: int = Field(20, ge=1, le=100)
+
+
+class Review(StrictModel):
+    max_claims: int = Field(2, ge=1, le=8)
+    max_arguments_per_paper: int = Field(2, ge=1, le=3)
+    limits: Limits = Field(
+        default_factory=lambda: Limits(
+            max_arguments=3,
+            max_concurrency=1,
+            max_model_calls=12,
+            max_tasks=16,
+            max_candidates_per_task=1,
+            max_input_tokens_per_call=65536,
+            max_output_tokens_per_call=4000,
+            max_run_seconds=600,
+            request_timeout_seconds=180,
+        )
+    )
+
+
+class RunRules(StrictModel):
+    """When a run stops. Unset limits do not apply; with none set it runs until stopped."""
+
+    max_arguments: int | None = Field(None, ge=1)
+    max_papers: int | None = Field(None, ge=1)
+    deadline: datetime | None = None
+    min_budget: int = Field(5, ge=0)
+    when_idle: Literal["sleep", "stop"] = "sleep"
+    idle_minutes: float = Field(30, gt=0)
+    dry_run: bool = False
 
 
 class AgentConfig(StrictModel):
     schema_version: Literal[1]
     name: str = Field(min_length=1)
-    description: str = ""
-    role: Literal["proposer", "verifier"] = "proposer"
-    instruction_file: str
-    model: ModelConfig | None = None
-    sub_agents: list[ChildReference] = Field(default_factory=list)
-    review_strategy: Literal["sections", "claims"] = "sections"
-    max_claims: int = Field(2, ge=1, le=8)
-    limits: Limits = Field(default_factory=Limits)
+    strategy_file: str = "strategy.md"
+    reviewer_file: str = "reviewer.md"
+    model: ModelConfig
+    verifier_model: ModelConfig | None = None
+    discovery: Discovery = Field(default_factory=Discovery)
+    review: Review = Field(default_factory=Review)
+    run: RunRules = Field(default_factory=RunRules)
 
 
 class LoadedAgent:
+    """Validated configuration plus the two plain-language instruction files."""
+
     def __init__(
-        self,
-        config: AgentConfig,
-        path: Path,
-        instruction: str,
-        children: list[LoadedAgent],
+        self, config: AgentConfig, path: Path, strategy: str, reviewer: str
     ) -> None:
-        self.config, self.path, self.instruction, self.children = (
+        self.config, self.path, self.strategy, self.reviewer = (
             config,
             path,
-            instruction,
-            children,
+            strategy,
+            reviewer,
         )
-        self.explicit_model = config.model is not None
+
+    @property
+    def root(self) -> Path:
+        return self.path.parent
 
 
 def _expand(
@@ -181,76 +219,54 @@ def _expand(
     return value
 
 
+def _check_model(model: ModelConfig, base: Path, *, check_env: bool) -> None:
+    if check_env and model.api_key_env and not os.environ.get(model.api_key_env):
+        raise ValueError(f"Missing environment variable: {model.api_key_env}")
+    if model.provider == "custom":
+        key_env = model.parameters.get("api_key_env")
+        if key_env is not None:
+            if not isinstance(key_env, str) or not re.fullmatch(
+                r"[A-Za-z_][A-Za-z0-9_]*", key_env
+            ):
+                raise ValueError("Custom api_key_env must name an environment variable")
+            if check_env and not os.environ.get(key_env):
+                raise ValueError(f"Missing environment variable: {key_env}")
+        factory_path, symbol = model.factory.rsplit(":", 1)
+        resolved = (base / factory_path).resolve()
+        if (
+            not resolved.is_file()
+            or resolved.suffix != ".py"
+            or not symbol.isidentifier()
+        ):
+            raise ValueError("Invalid custom factory path or function name")
+        model.factory = f"{resolved}:{symbol}"
+
+
 def load_config(
-    path: str | Path = "agent.yaml", *, supplied_provider: bool = False
+    path: str | Path = "agent.yaml", *, check_env: bool = True
 ) -> LoadedAgent:
-    """Validate all files before any provider import or model request."""
-    seen_paths: set[Path] = set()
-    names: set[str] = set()
-
-    def load(file: Path, parent: AgentConfig | None = None) -> LoadedAgent:
-        file = file.resolve()
-        if file in seen_paths:
-            raise ValueError(f"Cyclic or duplicate config reference: {file.name}")
-        seen_paths.add(file)
-        try:
-            with file.open("r", encoding="utf-8") as handle:
-                content = handle.read(1_048_577)
-            if len(content) > 1_048_576:
-                raise ValueError("YAML configuration exceeds size limit")
-            raw = yaml.load(content, Loader=ConfigLoader)
-        except (yaml.YAMLError, RecursionError) as exc:
-            raise ValueError("Invalid YAML syntax") from exc
-        if not isinstance(raw, dict):
-            raise ValueError("agent.yaml must contain a mapping")  # noqa: TRY004 -- invalid input document
-        config = AgentConfig.model_validate(_expand(raw))
-        if config.name in names:
-            raise ValueError(f"Duplicate agent name: {config.name}")
-        names.add(config.name)
-        explicit_model = config.model is not None
-        if parent:
-            if config.sub_agents:
-                raise ValueError("Nested delegation and cycles are not supported")
-            if "limits" in raw:
-                raise ValueError("Children inherit shared limits")
-            config = config.model_copy(
-                update={"model": config.model or parent.model, "limits": parent.limits}
-            )
-        if config.model is None:
-            raise ValueError("Root model is required")
-        model = config.model
-        uses_override = supplied_provider and (parent is None or not explicit_model)
-        if not uses_override:
-            if model.api_key_env and not os.environ.get(model.api_key_env):
-                raise ValueError(f"Missing environment variable: {model.api_key_env}")
-            if model.provider == "custom":
-                key_env = model.parameters.get("api_key_env")
-                if key_env is not None:
-                    if not isinstance(key_env, str) or not re.fullmatch(
-                        r"[A-Za-z_][A-Za-z0-9_]*", key_env
-                    ):
-                        raise ValueError(
-                            "Custom api_key_env must name an environment variable"
-                        )
-                    if not os.environ.get(key_env):
-                        raise ValueError(f"Missing environment variable: {key_env}")
-                factory_path, symbol = model.factory.rsplit(":", 1)
-                resolved = (file.parent / factory_path).resolve()
-                if (
-                    not resolved.is_file()
-                    or resolved.suffix != ".py"
-                    or not symbol.isidentifier()
-                ):
-                    raise ValueError("Invalid custom factory path or function name")
-                model.factory = f"{resolved}:{symbol}"
-        instruction = (file.parent / config.instruction_file).read_text(
-            encoding="utf-8"
-        )
-        children = [
-            load(file.parent / ref.config_path, config) for ref in config.sub_agents
-        ]
-        loaded = LoadedAgent(config, file, instruction, children)
-        loaded.explicit_model = explicit_model
-        return loaded
-
-    return load(Path(path))
+    """Validate configuration and instruction files before any network request."""
+    file = Path(path).resolve()
+    try:
+        with file.open("r", encoding="utf-8") as handle:
+            content = handle.read(1_048_577)
+        if len(content) > 1_048_576:
+            raise ValueError("YAML configuration exceeds size limit")
+        raw = yaml.load(content, Loader=ConfigLoader)
+    except (yaml.YAMLError, RecursionError) as exc:
+        raise ValueError("Invalid YAML syntax") from exc
+    if not isinstance(raw, dict):
+        raise ValueError("agent.yaml must contain a mapping")  # noqa: TRY004 -- invalid input document
+    config = AgentConfig.model_validate(_expand(raw), strict=False)
+    for model in filter(None, (config.model, config.verifier_model)):
+        _check_model(model, file.parent, check_env=check_env)
+    texts = []
+    for name in (config.strategy_file, config.reviewer_file):
+        instruction = file.parent / name
+        if not instruction.is_file():
+            raise ValueError(f"Missing instruction file: {name}")
+        text = instruction.read_text(encoding="utf-8").strip()
+        if not text:
+            raise ValueError(f"Instruction file is empty: {name}")
+        texts.append(text)
+    return LoadedAgent(config, file, *texts)

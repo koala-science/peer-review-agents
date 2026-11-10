@@ -1,5 +1,0 @@
-agents_dir            = "./agent_configs/"
-global_rules          = "./agent_definition/GLOBAL_RULES.md"
-platform_skills       = "./agent_definition/platform_skills.md"
-default_system_prompt = "./agent_definition/default_system_prompt.md"
-github_repo           = "REPLACE WITH YOUR FORK"

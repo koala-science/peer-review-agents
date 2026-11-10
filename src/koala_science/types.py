@@ -1,4 +1,4 @@
-"""Versioned public contracts for local reviews."""
+"""Typed contracts shared by the review, selection, and platform layers."""
 
 from __future__ import annotations
 
@@ -91,20 +91,6 @@ class Proposals(StrictModel):
     candidates: list[Candidate]
 
 
-class BackendResult(Proposals):
-    """Proposals and explicit source coverage reported by an external backend."""
-
-    inspected_span_ids: list[str]
-
-
-class Verdict(StrictModel):
-    decision: Literal["supported", "unsupported", "uncertain"]
-    atomic: bool
-    reason: str
-    revision: str | None = None
-    requested_span_ids: list[str] = Field(default_factory=list)
-
-
 class ClaimFocus(StrictModel):
     claim: str = Field(min_length=1, max_length=2000)
     why_it_matters: str = Field(min_length=1, max_length=2000)
@@ -121,13 +107,28 @@ class KnownArgument(StrictModel):
     position: Literal["positive", "negative"]
 
 
-class QualityVerdict(Verdict):
-    importance: Literal["substantive", "minor", "uncertain"]
-    contribution: str = Field(min_length=1)
-    strongest_counterargument: str = Field(min_length=1)
-    counterargument_resolved: bool
-    novelty: Literal["new", "duplicate", "uncertain"]
-    novelty_reason: str = Field(min_length=1)
+class Check(StrictModel):
+    passed: bool
+    reason: str = Field(min_length=1)
+
+
+PLATFORM_CHECKS = ("moderation", "validity", "relevance", "uniqueness", "verification")
+REVISABLE_CHECKS = frozenset({"validity", "verification"})
+
+
+class QualityVerdict(StrictModel):
+    """One pass/fail per platform check. Every check must pass to submit."""
+
+    moderation: Check
+    validity: Check
+    relevance: Check
+    uniqueness: Check
+    verification: Check
+    revision: str | None = None
+    requested_span_ids: list[str] = Field(default_factory=list)
+
+    def failed(self) -> list[str]:
+        return [name for name in PLATFORM_CHECKS if not getattr(self, name).passed]
 
 
 class Duplicate(StrictModel):
@@ -172,24 +173,6 @@ class TaskResult(StrictModel):
     model: str | None = None
 
 
-class PaperContext(StrictModel):
-    paper: Source
-    sources: list[Source]
-
-
-class BackendBudget(Protocol):
-    async def reserve_call(self) -> None: ...
-    def report_usage(self, response: ModelResponse) -> None: ...
-
-
-class ReviewBackend(Protocol):
-    supports_budget: Literal[True]
-
-    async def propose(
-        self, context: PaperContext, limits: Limits, budget: BackendBudget
-    ) -> BackendResult: ...
-
-
 class ReviewResult(StrictModel):
     schema_version: Literal[1] = 1
     run_id: str
@@ -205,3 +188,14 @@ class ReviewResult(StrictModel):
         from .output import save_result
 
         save_result(self, directory)
+
+
+class RankedPaper(StrictModel):
+    paper_id: str = Field(min_length=1, max_length=200)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class Ranking(StrictModel):
+    """Papers that fit the strategy, best first. Omitted papers do not fit."""
+
+    ranked: list[RankedPaper] = Field(max_length=100)

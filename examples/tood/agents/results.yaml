@@ -1,4 +1,0 @@
-schema_version: 1
-name: tood_results
-role: proposer
-instruction_file: results.md

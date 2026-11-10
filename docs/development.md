@@ -1,38 +1,45 @@
-# Develop Koala
-
-Run development commands from the repository root.
-
-## Develop and test
+# Developing the agent
 
 ```bash
 uv sync
 uv run python -m pytest
-uv run ruff check src/koala_science examples tests/test_local_review.py tests/test_local_contracts.py tests/test_review_hardening.py
-uv build
-uv run python tests/wheel_smoke.py
+uv run ruff check src tests
 ```
 
-Tests use fake providers and mock HTTP. They do not spend model credit. See
-[release validation](release-validation.md) for remaining release gates.
+Tests run offline against `tests/fakes.py`: an in-memory platform (`FakePlatform`)
+and a scripted model (`ScriptedModel`). They never spend credit.
 
-Run one heavy test or build process at a time. The wheel smoke check installs the
-built wheel into an isolated environment outside the checkout and exercises its imports and templates.
-Legacy shell and permission tests require POSIX facilities. Report unsupported Windows checks explicitly.
-Read [AGENTS.md](../AGENTS.md) before edits and [library contracts](library.md) before changing runtime behavior.
-Edit examples in the root `examples/` directory. The wheel packages them as template resources.
+## Where things live
 
-## Python API
+| Change | File |
+|---|---|
+| Run order, stop rules, submission, outcome tracking | `src/koala_science/loop.py` |
+| Feed scanning, hard filters, ranking prompt | `src/koala_science/selector.py` |
+| Review stages, prompts, quality bar | `src/koala_science/runner.py` |
+| Quality verdict and other schemas | `src/koala_science/types.py` |
+| `agent.yaml` schema | `src/koala_science/config.py` |
+| Platform endpoints | `src/koala_science/platform.py` |
+| Log layout and state | `src/koala_science/audit.py` |
+| Argument request body | `src/koala_science/payload.py` |
 
-Install the checkout in your Python project with `uv add /path/to/peer-review-agents`.
+## Rules worth keeping
 
-```python
-import koala_science as koala
+- Control flow stays in code. The model ranks papers and reviews them; it never
+  decides what to call next. That keeps every decision in the logs.
+- Never repeat a write that may have landed. An uncertain `POST /arguments/` is
+  reconciled from `GET /users/{id}/arguments`, never retried.
+- Never truncate evidence or sources silently. Raise, or record the gap.
+- Paper text is untrusted data. It cannot change instructions, limits, or tools.
+- The agent writes logs but never commits, pushes, or contacts anything other than
+  the Koala API, paper storage, and the configured model.
+- Keep the quality bar aligned with the platform's checks in
+  [skill.md](https://koala.science/skill.md). When the platform changes a check,
+  update `PLATFORM_CHECKS_TEXT` in `runner.py`.
 
-agent = koala.Agent.from_config("agent.yaml")
-result = agent.review("paper.pdf", sources=["supplement.md"])
-result.save("runs/first")
-for argument in result.arguments:
-    print(argument.statement)
-```
+## Platform API notes
 
-Inside notebooks or another event loop, use `await agent.areview("paper.pdf")`.
+The agent works with the API as it is. Some filters run client-side and would be
+cheaper on the server: recency, maximum argument count, the owner's remaining slots
+per paper, and owner authorship (`GET /papers/{id}/authorship` reports the caller,
+which is the agent, not its owner). Owner-authored papers are currently discovered
+when the platform answers a submission with 403.

@@ -1,251 +1,245 @@
-"""Bounded platform transport and exact arXiv identity lookup; no implicit writes."""
+"""Koala platform client: the agent's only route to papers, arguments, and storage."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
-import re
 import time
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlsplit
 
 import httpx
 
+DEFAULT_BASE_URL = "https://koala.science"
+MAX_JSON_BYTES = 8 * 1024 * 1024
+MAX_PDF_BYTES = 100 * 1024 * 1024
+LOGGED_BODY_CHARS = 20000
+
 
 class PlatformError(Exception):
-    """Sanitized failure; uncertain writes must be reconciled before retrying."""
+    """A failed platform request. ``uncertain`` means a write may have landed."""
 
     def __init__(
-        self, message: str, *, status: int | None = None, uncertain: bool = False
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        detail: Any = None,
+        uncertain: bool = False,
     ) -> None:
         super().__init__(message)
         self.status = status
+        self.detail = detail
         self.uncertain = uncertain
 
 
-def arxiv_identity(value: str) -> tuple[str, int | None]:
-    value = value.strip()
-    if "://" in value:
-        url = urlsplit(value)
-        if (
-            url.scheme not in {"http", "https"}
-            or url.hostname not in {"arxiv.org", "www.arxiv.org", "export.arxiv.org"}
-            or url.username
-            or url.password
-            or url.query
-            or url.fragment
-        ):
-            raise ValueError("Invalid arXiv identity URL")
-        value = re.sub(r"^/(abs|pdf)/", "", url.path)
-    value = (
-        re.sub(r"^arxiv:", "", value, flags=re.IGNORECASE)
-        .removesuffix("/")
-        .removesuffix(".pdf")
-    )
-    match = re.fullmatch(
-        r"(\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?/\d{7})(?:v([1-9]\d*))?",
-        value,
-        re.IGNORECASE,
-    )
-    if not match:
-        raise ValueError("Invalid arXiv identifier")
-    canonical = re.sub(r"\.[a-z]{2}/", "/", match[1].lower())
-    return canonical, int(match[2]) if match[2] else None
+def base_url() -> str:
+    value = os.environ.get("KOALA_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"https", "http"} or not parsed.hostname:
+        raise ValueError("KOALA_BASE_URL must be an HTTP(S) origin")
+    return value
 
 
-def remote_identity(paper: dict[str, Any]) -> tuple[str, int | None] | None:
-    identities = []
-    for key in ("arxiv_id", "pdf_url"):
-        value = paper.get(key)
-        if value:
-            try:
-                identities.append(arxiv_identity(value))
-            except (ValueError, AttributeError):
-                if key == "arxiv_id":
-                    raise ValueError(
-                        "Platform returned an invalid arXiv identity"
-                    ) from None
-    if not identities:
-        return None
-    if (
-        len({i[0] for i in identities}) != 1
-        or len({i[1] for i in identities if i[1] is not None}) > 1
-    ):
-        raise ValueError("Platform manuscript identifiers disagree")
-    return identities[0][0], next((i[1] for i in identities if i[1] is not None), None)
-
-
-def verify_paper(
-    paper: dict[str, Any], identity: tuple[str, int | None], confirm_unknown: bool
-) -> None:
-    remote = remote_identity(paper)
-    if remote is None or remote[0] != identity[0]:
-        raise ValueError("Platform paper does not match workspace arXiv identity")
-    if identity[1] is not None and remote[1] is not None and identity[1] != remote[1]:
-        raise ValueError("Platform manuscript version differs from reviewed version")
-    if (identity[1] is None or remote[1] is None) and not confirm_unknown:
-        raise ValueError(
-            "Manuscript version unavailable; inspect it and pass --confirm-version"
-        )
+def _clip(value: Any) -> Any:
+    text = json.dumps(value, ensure_ascii=False)
+    return value if len(text) <= LOGGED_BODY_CHARS else text[:LOGGED_BODY_CHARS] + "…"
 
 
 class PlatformClient:
-    """Fixed production origin; transport injection is reserved for offline tests."""
+    """Synchronous client authenticated as one agent.
 
-    def __init__(self, *, transport: httpx.BaseTransport | None = None) -> None:
+    ``on_event`` receives a dict for every request (never the key), so the caller
+    can keep the raw interaction log the platform's audit rules ask for.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        origin: str | None = None,
+        transport: httpx.BaseTransport | None = None,
+        on_event: Callable[[dict[str, Any]], None] | None = None,
+        retries: int = 3,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        if not api_key or any(c.isspace() for c in api_key):
+            raise ValueError("Set KOALA_AGENT_API_KEY to the agent's API key")
+        self.origin = (origin or base_url()).rstrip("/")
         self.client = httpx.Client(
-            base_url="https://koala.science/api/v1/",
-            timeout=30,
+            base_url=self.origin + "/api/v1/",
+            timeout=60,
             follow_redirects=False,
             transport=transport,
-            headers={"Accept-Encoding": "identity"},
+            headers={"Authorization": api_key},
         )
+        self.storage = httpx.Client(
+            timeout=120, follow_redirects=True, transport=transport
+        )
+        self.on_event = on_event or (lambda event: None)
+        self.retries = retries
+        self.sleep = sleep
 
-        self.deadline: float | None = None
+    def close(self) -> None:
+        self.client.close()
+        self.storage.close()
 
-    def __enter__(self) -> PlatformClient:  # noqa: PYI034 -- supports Python 3.10 without a typing backport
+    def __enter__(self) -> PlatformClient:  # noqa: PYI034 -- Python 3.10 has no typing.Self
         return self
 
     def __exit__(self, *args: object) -> None:
-        self.client.close()
+        self.close()
 
     def request(
         self,
         method: str,
         path: str,
         *,
-        actor: str | None = None,
-        payload: dict | None = None,
-        params: dict | None = None,
+        params: dict[str, Any] | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> Any:
-        headers = {}
-        if actor:
-            variable = (
-                "KOALA_OWNER_ACCESS_TOKEN"
-                if actor == "owner"
-                else "KOALA_AGENT_API_KEY"
-            )
-            token = os.environ.get(variable)
-            if not token:
-                raise ValueError(f"Set {variable} in the environment")
-            headers["Authorization"] = f"Bearer {token}"
-        try:
-            timeout = (
-                30
-                if self.deadline is None
-                else min(30, self.deadline - time.monotonic())
-            )
-            if timeout <= 0:
-                raise PlatformError("Platform polling deadline reached", uncertain=True)
-            with self.client.stream(
-                method,
-                path,
-                headers=headers,
-                json=payload,
-                params=params,
-                timeout=timeout,
-            ) as response:
-                if not 200 <= response.status_code < 300:
-                    status = response.status_code
-                    detail = "Check authentication, eligibility, allowance, or budget"
-                    raise PlatformError(
-                        f"Platform HTTP {status}. {detail}",
-                        status=status,
-                        uncertain=method == "POST" and (status >= 500 or status == 408),
-                    )
-                if response.headers.get("content-encoding", "identity") != "identity":
-                    raise ValueError("Compressed platform response")
-                body = bytearray()
-                for chunk in response.iter_bytes():
-                    if self.deadline is not None and time.monotonic() >= self.deadline:
-                        raise PlatformError(
-                            "Platform polling deadline reached", uncertain=True
-                        )
-                    body.extend(chunk)
-                    if len(body) > 8 * 1024 * 1024:
-                        raise ValueError("Platform response exceeds limit")
-                return json.loads(body)
-        except (httpx.HTTPError, ValueError) as exc:
-            raise PlatformError(
-                "Platform response unavailable or invalid", uncertain=method == "POST"
-            ) from exc
-
-    def pages(
-        self, path: str, *, params: dict | None = None, actor: str | None = None
-    ) -> list[dict]:
-        records: list[dict] = []
-        seen = set()
-        for offset in range(0, 100000, 100):
-            page = self.request(
-                "GET",
-                path,
-                params={**(params or {}), "skip": offset, "limit": 100},
-                actor=actor,
-            )
-            if not isinstance(page, list) or len(page) > 100:
-                raise PlatformError("Invalid platform pagination")
-            for item in page:
-                record = item.get("paper", item) if isinstance(item, dict) else {}
-                identifier = record.get("id")
-                if not isinstance(identifier, str) or identifier in seen:
-                    raise PlatformError("Incomplete or unstable platform pagination")
-                seen.add(identifier)
-                records.append(record)
-            if not page:
-                return records
-            # An explicit empty page proves exhaustion even if the server caps page size.
-            if len(page) < 100:
-                tail = self.request(
-                    "GET",
-                    path,
-                    params={**(params or {}), "skip": offset + len(page), "limit": 100},
-                    actor=actor,
+        params = {k: v for k, v in (params or {}).items() if v is not None}
+        for attempt in range(self.retries + 1):
+            event: dict[str, Any] = {
+                "kind": "platform",
+                "method": method,
+                "path": path,
+                "params": params,
+                "payload": payload,
+            }
+            try:
+                response = self.client.request(
+                    method, path, params=params, json=payload
                 )
-                if tail != []:
-                    raise PlatformError("Incomplete platform pagination")
-                return records
-        raise PlatformError("Platform pagination limit reached; absence is unproven")
+            except httpx.HTTPError as exc:
+                event["error"] = type(exc).__name__
+                self.on_event(event)
+                if method == "GET" and attempt < self.retries:
+                    self.sleep(2**attempt)
+                    continue
+                raise PlatformError(
+                    f"Platform unreachable: {type(exc).__name__}",
+                    uncertain=method != "GET",
+                ) from exc
+            status = response.status_code
+            event["status"] = status
+            if len(response.content) > MAX_JSON_BYTES:
+                self.on_event(event)
+                raise PlatformError(
+                    "Platform response exceeds size limit", status=status
+                )
+            try:
+                body = response.json() if response.content else None
+            except ValueError:
+                body = response.text[:2000]
+            event["response"] = _clip(body)
+            self.on_event(event)
+            # 429 means nothing was created, so even a POST is safe to repeat.
+            retryable = status == 429 or (method == "GET" and status >= 500)
+            if retryable and attempt < self.retries:
+                self.sleep(min(60, 2 ** (attempt + 1)))
+                continue
+            if 200 <= status < 300:
+                return body
+            detail = body.get("detail") if isinstance(body, dict) else body
+            raise PlatformError(
+                f"Platform HTTP {status} on {method} /{path}: {detail}",
+                status=status,
+                detail=detail,
+                uncertain=method != "GET" and status >= 500,
+            )
+        raise AssertionError("unreachable")  # pragma: no cover
 
-    def paper(self, paper_id: str) -> dict:
+    def me(self) -> dict[str, Any]:
+        profile = self.request("GET", "users/me")
+        if not isinstance(profile, dict) or profile.get("actor_type") != "agent":
+            raise PlatformError(
+                "KOALA_AGENT_API_KEY does not identify an agent; use the agent key, not a human token"
+            )
+        return profile
+
+    def papers(
+        self,
+        *,
+        domain: str | None = None,
+        sort: str = "new",
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        page = self.request(
+            "GET",
+            "papers/",
+            params={"domain": domain, "sort": sort, "skip": skip, "limit": limit},
+        )
+        if not isinstance(page, list):
+            raise PlatformError("Invalid paper listing")
+        return page
+
+    def paper(self, paper_id: str) -> dict[str, Any]:
         data = self.request("GET", "papers/" + quote(paper_id, safe=""))
         if not isinstance(data, dict) or data.get("id") != paper_id:
-            raise PlatformError("Invalid platform paper response")
+            raise PlatformError("Invalid paper response")
         return data
 
-    def find_paper(
-        self, arxiv: str, title: str, saved_id: str | None = None
-    ) -> dict | None:
-        canonical, _ = arxiv_identity(arxiv)
-        if saved_id:
-            paper = self.paper(saved_id)
-            identity = remote_identity(paper)
-            if not identity or identity[0] != canonical:
-                raise ValueError("Saved platform ID does not match workspace paper")
-            return paper
-        matches: dict[str, dict] = {}
-        for query in dict.fromkeys([canonical, title]):
-            if query:
-                for paper in self.pages(
-                    "search/", params={"q": query, "type": "paper"}
-                ):
-                    identity = remote_identity(paper)
-                    if identity and identity[0] == canonical:
-                        matches[paper["id"]] = paper
-        if not matches:
-            for paper in self.pages("papers/", params={"sort": "new"}):
-                identity = remote_identity(paper)
-                if identity and identity[0] == canonical:
-                    matches[paper["id"]] = paper
-        if len(matches) > 1:
-            raise ValueError("Ambiguous platform paper identity")
-        return self.paper(next(iter(matches))) if matches else None
+    def paper_arguments(self, paper_id: str) -> list[dict[str, Any]]:
+        data = self.request(
+            "GET",
+            "papers/" + quote(paper_id, safe="") + "/arguments",
+            params={"limit": 1000},
+        )
+        if not isinstance(data, list):
+            raise PlatformError("Invalid argument listing")
+        return data
 
-    def arguments(self, paper_id: str, agent_id: str) -> list[dict]:
-        # User listings include the agent's rejected/pending arguments when authenticated.
-        own = self.pages(
-            "users/" + quote(agent_id, safe="") + "/arguments", actor="agent"
-        )
-        public = self.pages("papers/" + quote(paper_id, safe="") + "/arguments")
-        return list(
-            {a["id"]: a for a in public + own if a.get("paper_id") == paper_id}.values()
-        )
+    def my_arguments(self, actor_id: str) -> list[dict[str, Any]]:
+        data = self.request("GET", "users/" + quote(actor_id, safe="") + "/arguments")
+        if not isinstance(data, list):
+            raise PlatformError("Invalid argument listing")
+        return data
+
+    def post_argument(self, payload: dict[str, str]) -> dict[str, Any]:
+        data = self.request("POST", "arguments/", payload=payload)
+        if not isinstance(data, dict) or "id" not in data:
+            raise PlatformError("Invalid argument response", uncertain=True)
+        return data
+
+    def resolve(self, url: str) -> str:
+        return url if url.startswith(("http://", "https://")) else self.origin + url
+
+    def download(self, url: str, destination: Path) -> str:
+        """Save a public storage file and return its SHA-256. No auth header is sent."""
+        full = self.resolve(url)
+        digest = hashlib.sha256()
+        size = 0
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        partial = destination.with_suffix(destination.suffix + ".part")
+        event: dict[str, Any] = {"kind": "download", "url": full}
+        try:
+            with (
+                self.storage.stream("GET", full) as response,
+                partial.open("wb") as out,
+            ):
+                event["status"] = response.status_code
+                if response.status_code != 200:
+                    raise PlatformError(
+                        f"Download failed with HTTP {response.status_code}",
+                        status=response.status_code,
+                    )
+                for chunk in response.iter_bytes():
+                    size += len(chunk)
+                    if size > MAX_PDF_BYTES:
+                        raise PlatformError("Download exceeds 100 MiB limit")
+                    digest.update(chunk)
+                    out.write(chunk)
+            partial.replace(destination)
+        except httpx.HTTPError as exc:
+            event["error"] = type(exc).__name__
+            raise PlatformError(f"Download failed: {type(exc).__name__}") from exc
+        finally:
+            partial.unlink(missing_ok=True)
+            event.update(bytes=size, sha256=digest.hexdigest())
+            self.on_event(event)
+        return digest.hexdigest()

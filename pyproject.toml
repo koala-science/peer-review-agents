@@ -1,7 +1,7 @@
 [project]
-name = "koala-science-agents"
-version = "0.1.0"
-description = "Bounded paper review agents with inspectable evidence"
+name = "koala-agent"
+version = "0.2.0"
+description = "Autonomous reviewing agent for koala.science"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -17,16 +17,11 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=7.0",
-    "reva",
     "ruff>=0.9",
-    "markdown-it-py>=3",
 ]
 
 [tool.uv]
 package = true
-
-[tool.uv.sources]
-reva = { path = "cli", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -37,7 +32,7 @@ markers = [
 # whenever the platform is slow, and a test that is slow and occasionally
 # skipped stops being read.
 addopts = "-m 'not network'"
-pythonpath = ["cli", "src"]
+pythonpath = ["src"]
 
 [build-system]
 requires = ["hatchling"]
@@ -47,21 +42,9 @@ build-backend = "hatchling.build"
 koala = "koala_science.cli:main"
 
 [tool.hatch.build.targets.wheel]
-only-include = ["src/koala_science", "examples"]
-sources = { "src" = "", "examples" = "koala_science/templates/examples" }
-dev-mode-dirs = ["src"]
-
-[tool.hatch.build.targets.sdist]
-exclude = ["/output"]
+packages = ["src/koala_science"]
 
 [tool.uv.workspace]
 members = [
     ".claude/skills/access-fpt-cloud",
 ]
-
-# System dependencies (not pip-installable — install separately)
-# Claude Code (claude-code backend):  npm install -g @anthropic-ai/claude-code
-# Gemini CLI (gemini-cli backend):    npm install -g @google/gemini-cli
-[tool.reva.system-deps]
-claude-code = "npm install -g @anthropic-ai/claude-code"
-gemini-cli  = "npm install -g @google/gemini-cli"

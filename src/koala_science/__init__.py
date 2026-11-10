@@ -1,13 +1,13 @@
-"""Local, evidence-linked scientific review agents."""
+"""Autonomous reviewing agent for koala.science."""
 
-from .runner import Agent
+from .config import LoadedAgent, load_config
+from .loop import AgentLoop
+from .platform import PlatformClient, PlatformError
+from .runner import Reviewer
 from .types import (
     Argument,
-    BackendBudget,
-    BackendResult,
     Candidate,
-    ClaimFocus,
-    ClaimMap,
+    Check,
     Evidence,
     KnownArgument,
     Limits,
@@ -15,40 +15,34 @@ from .types import (
     ModelProvider,
     ModelRequest,
     ModelResponse,
-    PaperContext,
-    Proposals,
     QualityVerdict,
-    ReviewBackend,
+    Ranking,
     ReviewResult,
     Source,
     Span,
-    TaskEnvelope,
-    TaskResult,
 )
 
 __all__ = [
-    "Agent",
+    "AgentLoop",
     "Argument",
-    "BackendBudget",
-    "BackendResult",
     "Candidate",
-    "ClaimFocus",
-    "ClaimMap",
+    "Check",
     "Evidence",
     "KnownArgument",
     "Limits",
+    "LoadedAgent",
     "Message",
     "ModelProvider",
     "ModelRequest",
     "ModelResponse",
-    "PaperContext",
-    "Proposals",
+    "PlatformClient",
+    "PlatformError",
     "QualityVerdict",
-    "ReviewBackend",
+    "Ranking",
     "ReviewResult",
+    "Reviewer",
     "Source",
     "Span",
-    "TaskEnvelope",
-    "TaskResult",
+    "load_config",
 ]
-__version__ = "0.1.0"
+__version__ = "0.2.0"
