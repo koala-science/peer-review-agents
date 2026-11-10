@@ -1,333 +1,98 @@
-"""Tests for reva.config — TOML resolution and defaults."""
-import re
-from pathlib import Path
+"""agent.yaml, the instruction files, and the payload sent to the platform."""
 
 import pytest
+import yaml
+from fakes import ROOT, agent_dir
 
-from reva.config import (
-    CONFIG_FILENAME,
-    DEFAULT_CONFIG,
-    DEFAULT_INITIAL_PROMPT,
-    PLACEHOLDER_GITHUB_REPO,
-    UPSTREAM_GITHUB_REPO_SLUG,
-    RevaConfig,
-    find_config,
-    load_config,
-    validate_github_repo,
-    write_default_config,
-)
+from koala_science.cli import main
+from koala_science.config import load_config
+from koala_science.payload import argument_payload
+from koala_science.types import Argument, Evidence, Provenance
 
 
-def test_write_default_config_creates_file(tmp_path):
-    result = write_default_config(tmp_path)
-    assert result.exists()
-    assert result.name == CONFIG_FILENAME
-    assert result.parent == tmp_path
+def test_repository_defaults_load(monkeypatch):
+    monkeypatch.setenv("KOALA_AGENT_API_KEY", "cs_x")
+    loaded = load_config(ROOT / "agent.yaml")
+    assert loaded.config.model.provider == "koala_proxy"
+    assert loaded.config.run.max_arguments == 10
+    assert "selection strategy" in loaded.strategy.lower()
+    assert loaded.reviewer.startswith("# Reviewer instructions")
 
 
-def test_write_default_config_creates_missing_parents(tmp_path):
-    target = tmp_path / "nested" / "dir"
-    result = write_default_config(target)
-    assert result.exists()
-    assert target.exists()
+def test_missing_key_is_reported_before_any_request(monkeypatch):
+    monkeypatch.delenv("KOALA_AGENT_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="KOALA_AGENT_API_KEY"):
+        load_config(ROOT / "agent.yaml")
 
 
-def test_default_config_file_contains_all_default_keys(tmp_path):
-    path = write_default_config(tmp_path)
-    content = path.read_text()
-    for key in DEFAULT_CONFIG:
-        assert key in content, f"{key} missing from default config"
+def test_missing_or_empty_instruction_file(tmp_path):
+    root = agent_dir(tmp_path)
+    (root / "strategy.md").write_text("  \n")
+    with pytest.raises(ValueError, match="empty: strategy.md"):
+        load_config(root / "agent.yaml")
+    (root / "strategy.md").unlink()
+    with pytest.raises(ValueError, match="Missing instruction file: strategy.md"):
+        load_config(root / "agent.yaml")
 
 
-def test_default_config_keys_are_exactly_expected():
-    """DEFAULT_CONFIG should contain only the simplified set of keys."""
-    assert set(DEFAULT_CONFIG) == {
-        "agents_dir",
-        "global_rules",
-        "platform_skills",
-        "default_system_prompt",
-        "github_repo",
+def test_unknown_fields_and_deadline_parsing(tmp_path):
+    root = agent_dir(tmp_path, deadline="2026-12-01T00:00:00Z")
+    assert load_config(root / "agent.yaml").config.run.deadline.year == 2026
+    raw = yaml.safe_load((root / "agent.yaml").read_text())
+    raw["run"]["max_argument"] = 3
+    (root / "agent.yaml").write_text(yaml.safe_dump(raw))
+    with pytest.raises(ValueError):
+        load_config(root / "agent.yaml")
+
+
+def test_yaml_duplicate_fields_are_rejected(tmp_path):
+    root = agent_dir(tmp_path)
+    (root / "agent.yaml").write_text(
+        (root / "agent.yaml").read_text() + "name: again\n"
+    )
+    with pytest.raises(ValueError, match="Duplicate YAML"):
+        load_config(root / "agent.yaml")
+
+
+def argument(**overrides):
+    fields = {
+        "kind": "praise",
+        "target": "ablation",
+        "statement": "The ablation isolates the memory module's contribution.",
+        "rationale": "Removing the module drops accuracy from 71.2 to 64.0 with everything else fixed.",
+        "evidence": [
+            Evidence(source_id="s", span_id="s:p3:0", page=3, excerpt="drops  to\n64.0")
+        ],
+        "id": "candidate-1",
+        "provenance": Provenance(
+            agent_name="a", model="m", prompt_digest="d", task_ids=[]
+        ),
+        "local_checks": {},
+    }
+    return Argument(**{**fields, **overrides})
+
+
+def test_payload_is_self_contained():
+    payload = argument_payload(argument(limitations=["Single seed."]), "p1")
+    assert payload == {
+        "paper_id": "p1",
+        "claim": "The ablation isolates the memory module's contribution.",
+        "position": "positive",
+        "evidence": (
+            "Removing the module drops accuracy from 71.2 to 64.0 with everything else fixed.\n\n"
+            'From the paper:\n- Page 3: "drops to 64.0"\n\nScope: Single seed.'
+        ),
     }
 
 
-def test_load_config_uses_explicit_path(tmp_path):
-    cfg_path = write_default_config(tmp_path)
-    config = load_config(str(cfg_path))
-    assert isinstance(config, RevaConfig)
-    assert config.project_root == tmp_path
-
-
-def test_load_config_resolves_agents_dir_relative_to_project_root(tmp_path):
-    cfg_path = write_default_config(tmp_path)
-    config = load_config(str(cfg_path))
-    assert config.agents_dir == (tmp_path / "agents/").resolve()
-
-
-def test_load_config_without_path_falls_back_to_defaults(tmp_path, monkeypatch):
-    """No config.toml anywhere → load_config returns defaults anchored at cwd."""
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("REVA_CONFIG", raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))  # no ~/.reva/config.toml
-    config = load_config(None)
-    assert config.project_root == tmp_path
-
-
-def test_find_config_via_explicit_path_that_exists(tmp_path):
-    cfg_path = write_default_config(tmp_path)
-    found = find_config(str(cfg_path))
-    assert found == cfg_path
-
-
-def test_find_config_via_explicit_path_that_does_not_exist(tmp_path):
-    assert find_config(str(tmp_path / "missing.toml")) is None
-
-
-def test_find_config_walks_up_from_cwd(tmp_path, monkeypatch):
-    cfg_path = write_default_config(tmp_path)
-    sub = tmp_path / "sub" / "deeper"
-    sub.mkdir(parents=True)
-    monkeypatch.chdir(sub)
-    monkeypatch.delenv("REVA_CONFIG", raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path / "nonexistent-home"))
-    found = find_config(None)
-    assert found == cfg_path
-
-
-def test_find_config_reads_env_var(tmp_path, monkeypatch):
-    cfg_path = write_default_config(tmp_path)
-    other = tmp_path / "unrelated"
-    other.mkdir()
-    monkeypatch.chdir(other)
-    monkeypatch.setenv("REVA_CONFIG", str(cfg_path))
-    monkeypatch.setenv("HOME", str(tmp_path / "nonexistent-home"))
-    found = find_config(None)
-    if (other / CONFIG_FILENAME).exists() or any(
-        (p / CONFIG_FILENAME).exists() for p in other.parents
-    ):
-        pass
-    else:
-        assert found == cfg_path
-
-
-def test_load_config_applies_custom_agents_dir(tmp_path):
-    cfg = tmp_path / CONFIG_FILENAME
-    cfg.write_text('agents_dir = "./my-agents/"\n')
-    config = load_config(str(cfg))
-    assert config.agents_dir.name == "my-agents"
-
-
-def test_load_config_merges_with_defaults(tmp_path):
-    """Overriding one key should leave other defaults intact."""
-    cfg = tmp_path / CONFIG_FILENAME
-    cfg.write_text('agents_dir = "./override/"\n')
-    config = load_config(str(cfg))
-    assert config.agents_dir.name == "override"
-    assert config.global_rules_path.name == "GLOBAL_RULES.md"
-
-
-def test_default_initial_prompt_is_nonempty_string():
-    assert isinstance(DEFAULT_INITIAL_PROMPT, str)
-    assert len(DEFAULT_INITIAL_PROMPT) > 0
-    # Must mention the .api_key file the owner provisions
-    assert ".api_key" in DEFAULT_INITIAL_PROMPT
-
-
-def test_default_initial_prompt_has_no_registration_language():
-    """Self-registration is gone — the prompt must not ask the agent to register."""
-    assert "register" not in DEFAULT_INITIAL_PROMPT.lower()
-    assert "owner_password" not in DEFAULT_INITIAL_PROMPT
-    assert "owner_email" not in DEFAULT_INITIAL_PROMPT
-    assert "owner_name" not in DEFAULT_INITIAL_PROMPT
-
-
-def test_default_config_has_github_repo():
-    assert "github_repo" in DEFAULT_CONFIG
-    assert DEFAULT_CONFIG["github_repo"] == ""
-
-
-def test_default_config_has_no_owner_fields():
-    assert "owner_email" not in DEFAULT_CONFIG
-    assert "owner_name" not in DEFAULT_CONFIG
-    assert "owner_password" not in DEFAULT_CONFIG
-
-
-def test_default_config_has_no_component_dirs():
-    for removed in (
-        "personas_dir",
-        "roles_dir",
-        "interests_dir",
-        "review_methodology_dir",
-        "review_format_dir",
-        "review_methodology",
-        "review_format",
-    ):
-        assert removed not in DEFAULT_CONFIG
-
-
-def test_reva_config_github_repo_default(tmp_path):
-    cfg_path = write_default_config(tmp_path)
-    config = load_config(str(cfg_path))
-    assert config.github_repo == ""
-
-
-def test_reva_config_has_no_owner_fields(tmp_path):
-    cfg_path = write_default_config(tmp_path)
-    config = load_config(str(cfg_path))
-    for removed in ("owner_email", "owner_name", "owner_password"):
-        assert not hasattr(config, removed)
-
-
-def test_reva_config_has_no_component_dirs(tmp_path):
-    cfg_path = write_default_config(tmp_path)
-    config = load_config(str(cfg_path))
-    for removed in (
-        "personas_dir",
-        "roles_dir",
-        "interests_dir",
-        "review_methodology_dir",
-        "review_format_dir",
-        "review_methodology_path",
-        "review_format_path",
-        "review_methodology_weights",
-    ):
-        assert not hasattr(config, removed)
-
-
-def test_load_config_reads_custom_github_repo(tmp_path):
-    cfg = tmp_path / CONFIG_FILENAME
-    cfg.write_text('github_repo = "https://github.com/example/repo"\n')
-    config = load_config(str(cfg))
-    assert config.github_repo == "https://github.com/example/repo"
-
-
-def test_initial_prompt_template_has_koala_base_url_placeholder():
-    assert "{koala_base_url}" in DEFAULT_INITIAL_PROMPT
-
-
-def test_initial_prompt_template_renders_without_error():
-    rendered = DEFAULT_INITIAL_PROMPT.format(
-        koala_base_url="https://koala.science",
-    )
-    # Placeholder must be gone
-    assert "{koala_base_url}" not in rendered
-    assert "https://koala.science" in rendered
-
-
-def test_initial_prompt_mentions_koala_science():
-    assert "Koala Science" in DEFAULT_INITIAL_PROMPT
-    rendered = DEFAULT_INITIAL_PROMPT.format(
-        koala_base_url="https://koala.science",
-    )
-    assert "https://koala.science" in rendered
-
-
-def test_initial_prompt_renders_with_staging_base_url():
-    rendered = DEFAULT_INITIAL_PROMPT.format(
-        koala_base_url="https://staging.koala.science",
-    )
-    assert "https://staging.koala.science" in rendered
-    assert "https://koala.science/" not in rendered
-    assert "https://koala.science\n" not in rendered
-    assert "https://koala.science " not in rendered
-
-
-def test_initial_prompt_explains_the_transparency_repo():
-    """`github_repo` is required to register an agent and is its audit trail.
-
-    Replaces a test that required the prompt to mention `github_file_url` — a
-    per-comment field the platform removed. Requiring it kept the prompt telling
-    agents to send something the API now rejects.
-
-    Asserts what the prompt must say about it, not merely that the word occurs:
-    naming the field while telling the agent to ignore it passed the first
-    version of this test.
-    """
-    assert "github_repo" in DEFAULT_INITIAL_PROMPT
-    lowered = DEFAULT_INITIAL_PROMPT.lower()
-    assert "audit trail" in lowered
-    assert any(word in lowered for word in ("logs", "prompt", "harness")), (
-        "the prompt names github_repo but never says what belongs in it"
-    )
-
-
-def test_initial_prompt_does_not_instruct_a_bearer_prefix():
-    """The documented header is `Authorization: <key>`, the bare key.
-
-    The platform accepts `Bearer <key>` too (`backend/app/core/deps.py`
-    `_extract_token`), so this is about following the documented convention —
-    not about avoiding a rejection, as an earlier version of this claimed.
-    """
-    assert not re.search(r"\bbearer\b", DEFAULT_INITIAL_PROMPT, re.IGNORECASE), (
-        "the prompt mentions a Bearer prefix; the documented form is the bare key, "
-        "and the previous version of this rule missed every phrasing that did not "
-        "put 'Authorization:' immediately before it"
-    )
-
-
-def test_validate_github_repo_accepts_a_real_fork():
-    assert validate_github_repo("https://github.com/alice/peer-review-agents") is None
-    assert validate_github_repo("https://github.com/alice/my-agent.git") is None
-    assert validate_github_repo("git@github.com:alice/whatever.git") is None
-
-
-def test_validate_github_repo_rejects_empty():
-    err = validate_github_repo("")
-    assert err is not None
-    assert "config.toml" in err
-
-
-def test_validate_github_repo_rejects_whitespace_only():
-    err = validate_github_repo("   \n")
-    assert err is not None
-
-
-def test_validate_github_repo_rejects_placeholder():
-    err = validate_github_repo(PLACEHOLDER_GITHUB_REPO)
-    assert err is not None
-    assert PLACEHOLDER_GITHUB_REPO in err
-
-
-def test_validate_github_repo_rejects_canonical_upstream_https():
-    err = validate_github_repo(f"https://github.com/{UPSTREAM_GITHUB_REPO_SLUG}")
-    assert err is not None
-    assert UPSTREAM_GITHUB_REPO_SLUG in err
-    assert "fork" in err.lower()
-
-
-def test_validate_github_repo_rejects_canonical_upstream_with_git_suffix():
-    err = validate_github_repo(f"https://github.com/{UPSTREAM_GITHUB_REPO_SLUG}.git")
-    assert err is not None
-
-
-def test_validate_github_repo_rejects_canonical_upstream_with_trailing_slash():
-    err = validate_github_repo(f"https://github.com/{UPSTREAM_GITHUB_REPO_SLUG}/")
-    assert err is not None
-
-
-def test_validate_github_repo_rejects_canonical_upstream_ssh():
-    err = validate_github_repo(f"git@github.com:{UPSTREAM_GITHUB_REPO_SLUG}.git")
-    assert err is not None
-
-
-def test_validate_github_repo_mentions_bypass_env_var_in_upstream_rejection():
-    err = validate_github_repo(f"https://github.com/{UPSTREAM_GITHUB_REPO_SLUG}")
-    assert err is not None
-    assert "REVA_ALLOW_UPSTREAM_REPO" in err
-
-
-def test_validate_github_repo_accepts_fork_named_peer_review_agents_under_different_owner():
-    assert validate_github_repo("https://github.com/alice/peer-review-agents") is None
-    assert validate_github_repo("https://github.com/alice/peer-review-agents.git") is None
-
-
-def test_validate_github_repo_accepts_fork_under_owner_whose_name_contains_koala_science():
-    """Owner equality is the discriminator: `koala-science-fork/peer-review-agents`
-    must pass because the owner is not literally `koala-science`."""
-    assert validate_github_repo(
-        "https://github.com/koala-science-fork/peer-review-agents"
-    ) is None
-
-
-def test_validate_github_repo_rejects_canonical_upstream_ssh_trailing_slash():
-    err = validate_github_repo(f"git@github.com:{UPSTREAM_GITHUB_REPO_SLUG}/")
-    assert err is not None
+def test_payload_is_never_truncated():
+    with pytest.raises(ValueError, match="nothing truncated"):
+        argument_payload(argument(statement="x" * 10001), "p1")
+
+
+def test_cli_reports_missing_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("KOALA_AGENT_API_KEY", raising=False)
+    root = agent_dir(tmp_path)
+    assert main(["--config", str(root / "agent.yaml"), "run", "--dry-run"]) == 2
+    assert "KOALA_AGENT_API_KEY" in capsys.readouterr().err
+    assert not (root / "logs").exists()
