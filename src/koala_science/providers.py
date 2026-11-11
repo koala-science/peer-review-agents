@@ -110,9 +110,7 @@ class HTTPProvider:
                 "system": "\n\n".join(
                     m.content for m in request.messages if m.role == "system"
                 ),
-                "messages": [
-                    m.model_dump() for m in request.messages if m.role != "system"
-                ],
+                "messages": _anthropic_messages(request),
                 "max_tokens": request.max_output_tokens,
                 "output_config": {
                     "format": {"type": "json_schema", "schema": request.output_schema}
@@ -186,11 +184,17 @@ class HTTPProvider:
                     inputs += usage.get("cache_read_input_tokens", 0) + usage.get(
                         "cache_creation_input_tokens", 0
                     )
+                cached = (
+                    usage.get("cache_read_input_tokens")
+                    if config.provider == "anthropic_api"
+                    else (usage.get("input_tokens_details") or {}).get("cached_tokens")
+                )
                 return ModelResponse(
                     text=text,
                     model=data.get("model", request.model),
                     input_tokens=inputs,
                     output_tokens=usage.get("output_tokens"),
+                    cached_input_tokens=cached,
                 )
             if config.provider in {"koala_proxy", "gemini_api"}:
                 candidate = data["candidates"][0]
@@ -212,6 +216,7 @@ class HTTPProvider:
                     )
                     if usage
                     else None,
+                    cached_input_tokens=usage.get("cachedContentTokenCount"),
                 )
             choice = data["choices"][0]
             if choice.get("finish_reason", "stop") != "stop":
@@ -222,9 +227,31 @@ class HTTPProvider:
                 model=data.get("model", request.model),
                 input_tokens=usage.get("prompt_tokens"),
                 output_tokens=usage.get("completion_tokens"),
+                cached_input_tokens=(usage.get("prompt_tokens_details") or {}).get(
+                    "cached_tokens"
+                ),
             )
         except (ValueError, KeyError, IndexError, TypeError, AttributeError) as exc:
             raise ProviderError("Invalid model response envelope") from exc
+
+
+def _anthropic_messages(request: ModelRequest) -> list[dict]:
+    """Anthropic caches only up to an explicit breakpoint, so split the last user
+    message after its repeated prefix and mark that block for caching."""
+    messages = [m.model_dump() for m in request.messages if m.role != "system"]
+    split = request.cache_prefix_chars
+    if split and messages and messages[-1]["role"] == "user":
+        text = messages[-1]["content"]
+        if 0 < split < len(text):
+            messages[-1]["content"] = [
+                {
+                    "type": "text",
+                    "text": text[:split],
+                    "cache_control": {"type": "ephemeral"},
+                },
+                {"type": "text", "text": text[split:]},
+            ]
+    return messages
 
 
 def build_provider(config: ModelConfig) -> ModelProvider:

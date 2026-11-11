@@ -22,6 +22,39 @@ and a scripted model (`ScriptedModel`). They never spend credit.
 | Log layout and state | `src/koala_science/audit.py` |
 | Argument request body | `src/koala_science/payload.py` |
 
+## Request layout and prompt caching
+
+A review sends the whole paper on every call, so its cost is mostly repeated
+input. Every review call about one paper (`claim_map`, `proposal`, `evidence`,
+`revision`, `duplicate`) therefore has the same layout, in this order:
+
+| Part | Content | Changes |
+|---|---|---|
+| system message | review rules, platform checks, `reviewer.md` | never within a run |
+| user message, start | `paper` (source ID, title, abstract), `paper_text` (every span: id, page, text), `known_arguments`, `names_to_describe` | once per paper |
+| user message, end | `stage`, `max_claims`, `candidates`, `guidance`, `task` | every call |
+
+The start of the user message is built once per paper (`Run.paper_block` in
+`runner.py`) and sent byte for byte, so calls after the first repeat a long
+prefix: system prompt plus paper. Providers then serve that prefix from cache:
+
+- **Gemini, Koala proxy:** automatic (implicit caching). The proxy bills cached
+  input at $0.15 per million tokens instead of $1.50.
+- **OpenAI:** automatic prefix caching.
+- **Anthropic:** only up to an explicit breakpoint. `ModelRequest.cache_prefix_chars`
+  tells the provider where the paper block ends, and it marks that block with
+  `cache_control`.
+- **CLI providers:** whatever the CLI does internally.
+
+Cached input is recorded per call as `cached_input_tokens` in `calls.jsonl` and
+in each review's `manifest.json`. Implicit caching is best effort, so check those
+numbers rather than assuming a discount.
+
+Keep anything that varies per call after `names_to_describe`. A timestamp, task
+ID, or stage name placed before the paper breaks the shared prefix and makes
+every call pay full price. `test_every_call_repeats_one_paper_prefix_for_caching`
+guards this.
+
 ## Rules worth keeping
 
 - Control flow stays in code. The model ranks papers and reviews them; it never

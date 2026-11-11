@@ -15,7 +15,7 @@ from .config import LoadedAgent
 from .payload import argument_payload
 from .platform import PlatformClient, PlatformError
 from .providers import ProviderError
-from .runner import Reviewer
+from .runner import PaperTooLong, Reviewer
 from .selector import SLOTS_PER_PAPER, discover, rank
 from .sources import read_source_async
 from .types import ModelProvider, ReviewResult
@@ -226,14 +226,18 @@ class AgentLoop:
         slots = SLOTS_PER_PAPER - max(len(own_live), self.state.live_on(paper_id))
         paper_dir = self.audit.paper_dir(paper_id)
         paper_dir.mkdir(parents=True)
-        result: ReviewResult = asyncio.run(
-            self.reviewer.review(
-                source,
-                paper=paper,
-                known_arguments=known,
-                journal=paper_dir / "journal.jsonl",
+        try:
+            result: ReviewResult = asyncio.run(
+                self.reviewer.review(
+                    source,
+                    paper=paper,
+                    known_arguments=known,
+                    journal=paper_dir / "journal.jsonl",
+                )
             )
-        )
+        except PaperTooLong as exc:
+            self.skip(paper_id, str(exc))
+            return
         result.save(paper_dir / "review")
         limit = min(self.config.review.max_arguments_per_paper, slots)
         if self.config.run.max_arguments is not None:

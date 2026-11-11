@@ -1,6 +1,7 @@
 """Located source snapshots and deterministic quote checks."""
 
 import asyncio
+import difflib
 import hashlib
 import json
 import re
@@ -8,6 +9,7 @@ import subprocess
 import sys
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from pypdf import PdfReader
 
@@ -63,6 +65,17 @@ async def read_source_async(path: str | Path, timeout: float) -> Source:
 def normalize(text: str) -> str:
     """Collapse Unicode whitespace; preserve case, punctuation and spelling."""
     return " ".join(text.split())
+
+
+def quote_form(text: str) -> str:
+    """Compare quotes despite PDF extraction noise, not despite different words.
+
+    Joins words hyphenated across line breaks, then keeps only letters, digits,
+    decimal points, and percent signs, so "perfor- mance", "the25configurations",
+    and "u·z" match the clean text a model quotes. Case and wording still count.
+    """
+    joined = re.sub(r"(?<=[A-Za-z])-\s+(?=[a-z])", "", text)
+    return "".join(c for c in joined if c.isalnum() or c in ".%")
 
 
 def read_source(path: str | Path) -> Source:
@@ -146,23 +159,103 @@ def read_source(path: str | Path) -> Source:
     )
 
 
-def check_evidence(
-    candidate: Candidate, spans: dict[str, Span], inspected: set[str]
-) -> str | None:
-    for evidence in candidate.evidence:
+def _page_text(spans: dict[str, Span], span: Span) -> str:
+    if span.page is None:
+        return span.text
+    return " ".join(
+        s.text
+        for s in spans.values()
+        if s.source_id == span.source_id and s.page == span.page
+    )
+
+
+def closest_passage(excerpt: str, spans: dict[str, Span]) -> dict[str, Any] | None:
+    """The span (plus its successor) sharing the longest verbatim run with a quote."""
+    target = quote_form(excerpt)
+    if not target:
+        return None
+    ordered = list(spans.values())
+    best, best_size = None, 0
+    for index, span in enumerate(ordered):
+        following = ordered[index + 1] if index + 1 < len(ordered) else None
+        text = span.text + (
+            " " + following.text
+            if following is not None and following.page == span.page
+            else ""
+        )
+        form = quote_form(text)
+        size = (
+            difflib.SequenceMatcher(None, form, target, autojunk=False)
+            .find_longest_match(0, len(form), 0, len(target))
+            .size
+        )
+        if size > best_size:
+            best, best_size = (span, text), size
+    if best is None or best_size < min(40, len(target) // 3):
+        return None
+    span, text = best
+    return {"span_id": span.id, "page": span.page, "text": text}
+
+
+def evidence_problems(candidate: Candidate, spans: dict[str, Span]) -> list[dict]:
+    """Every quote that does not resolve, with what the paper actually says nearby.
+
+    The result is feedback for a repair attempt, so each entry names the quote,
+    the problem, and where the quoted text really is when it can be found.
+    """
+    problems = []
+    for index, evidence in enumerate(candidate.evidence):
         span = spans.get(evidence.span_id)
+        entry: dict[str, Any] = {"evidence_index": index, "excerpt": evidence.excerpt}
         if span is None or span.source_id != evidence.source_id:
-            return "Unknown source or span"
-        if span.id not in inspected:
-            return "Evidence references an unread span"
+            problems.append({**entry, "problem": "unknown source or span ID"})
+            continue
         if (span.page, span.line_start, span.line_end) != (
             evidence.page,
             evidence.line_start,
             evidence.line_end,
         ):
-            return "Evidence locator does not match its span"
-        if normalize(evidence.excerpt) not in normalize(span.text):
-            return "Excerpt does not match the source"
-    if not set(candidate.absence_scope).issubset(inspected):
-        return "Absence scope includes unread spans"
-    return None
+            problems.append(
+                {
+                    **entry,
+                    "problem": "locator does not match the cited span",
+                    "span_locator": {
+                        "page": span.page,
+                        "line_start": span.line_start,
+                        "line_end": span.line_end,
+                    },
+                }
+            )
+            continue
+        excerpt = quote_form(evidence.excerpt)
+        if excerpt and excerpt in quote_form(_page_text(spans, span)):
+            continue
+        found = [s for s in spans.values() if excerpt and excerpt in quote_form(s.text)]
+        if found:
+            problems.append(
+                {
+                    **entry,
+                    "problem": "quoted text is on a different page or span",
+                    "found_in": [{"span_id": s.id, "page": s.page} for s in found[:3]],
+                }
+            )
+            continue
+        closest = closest_passage(evidence.excerpt, spans)
+        problems.append(
+            {
+                **entry,
+                "problem": "quote is not verbatim in the paper text",
+                "closest_paper_text": closest,
+            }
+        )
+    if not set(candidate.absence_scope).issubset(spans):
+        problems.append({"problem": "absence_scope lists unknown span IDs"})
+    return problems
+
+
+def check_evidence(
+    candidate: Candidate, spans: dict[str, Span], inspected: set[str] | None = None
+) -> str | None:
+    """First evidence problem as text, or None when every quote resolves."""
+    problems = evidence_problems(candidate, spans)
+    return problems[0]["problem"] if problems else None

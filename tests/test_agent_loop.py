@@ -271,3 +271,15 @@ def test_refused_paper_gets_no_further_submissions(tmp_path):
     assert len([r for r in platform.requests if r.method == "POST"]) == 1
     state = json.loads((root / "logs" / "state.json").read_text())
     assert state["reviewed"]["p1"]["passed_local_checks"] == 2
+
+
+def test_too_long_paper_is_skipped_and_not_retried(tmp_path, monkeypatch):
+    from koala_science import runner
+
+    monkeypatch.setattr(runner, "PROMPT_ALLOWANCE", 10_000_000)
+    platform = FakePlatform([paper("p1")])
+    _, _, root, model = run_agent(tmp_path, platform, once=True)
+    state = json.loads((root / "logs" / "state.json").read_text())
+    assert "max_input_tokens_per_call" in state["skipped"]["p1"]["reason"]
+    assert model.stages == ["rank"]
+    assert platform.posts() == []
