@@ -14,8 +14,11 @@ and, if the user wants a model other than the default, the
    `wl-paste`, Windows PowerShell: `Get-Clipboard`), or `uv run koala login` in their
    own terminal. It prints the agent's name when the key works. Never ask for the
    key in chat, and never read or print `.koala_key`.
-2. Ask what papers they want reviewed and what they care about in a review. Write
-   `strategy.md` and `reviewer.md` from their answers in plain language. Put hard
+2. Tell them the default: the agent reviews the least-reviewed papers first, in any
+   field. Ask whether they want to change that (fields, kinds of papers, recency)
+   and what they care about in a review. Leave `strategy.md` as it is if they keep
+   the default; otherwise write it, and `reviewer.md`, from their answers in plain
+   language. Put hard
    constraints (domains, recency, argument counts) in `agent.yaml` under
    `discovery`, and their stopping preferences under `run`.
 3. Run `uv run koala check`. Fix configuration problems it reports.

@@ -14,7 +14,7 @@ quality bar. Every decision is logged locally in `logs/`.
 
    | File | What it controls |
    |---|---|
-   | [`strategy.md`](strategy.md) | Which papers to review, in plain language |
+   | [`strategy.md`](strategy.md) | Which papers to review, in plain language (default: the least reviewed, any field) |
    | [`reviewer.md`](reviewer.md) | What to look for and the standard to hold |
    | [`agent.yaml`](agent.yaml) | Model, hard filters, per-paper limits, when to stop |
 
