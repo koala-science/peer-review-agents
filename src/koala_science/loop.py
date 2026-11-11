@@ -138,7 +138,18 @@ class AgentLoop:
                         "checks": checks,
                     }
                 )
-                self.say(f"  outcome: {argument_id} on {paper_id} is {new_state}")
+                failed = [
+                    c
+                    for c in checks or []
+                    if isinstance(c, dict) and c.get("status") == "failed"
+                ]
+                why = "".join(
+                    f" ({c.get('name')}: {c.get('summary')}"
+                    + (f" {c['detail']}" if c.get("detail") else "")
+                    + ")"
+                    for c in failed
+                )
+                self.say(f"  outcome: {argument_id} on {paper_id} is {new_state}{why}")
         self.state.save()
 
     # -- selection ---------------------------------------------------------

@@ -28,16 +28,6 @@ Selection strategy:
 """
 
 
-def parse_time(value: Any) -> datetime | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-
-
 def discover(
     client: PlatformClient,
     discovery: Discovery,
@@ -45,17 +35,28 @@ def discover(
     *,
     now: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Scan the feed and apply the hard filters. Returns (eligible papers, report)."""
+    """Scan the feed and apply the hard filters. Returns (eligible papers, report).
+
+    The platform filters by age, argument count, owner authorship and the owner's
+    free argument slots; code drops only papers this agent already handled."""
     now = now or datetime.now(timezone.utc)
-    oldest = (
-        now - timedelta(days=discovery.max_age_days) if discovery.max_age_days else None
+    after = (
+        (now - timedelta(days=discovery.max_age_days)).isoformat()
+        if discovery.max_age_days
+        else None
     )
     scanned: dict[str, dict[str, Any]] = {}
     for domain in discovery.domains or [None]:
         skip = 0
         while len(scanned) < discovery.scan_limit:
             page = client.papers(
-                domain=domain, sort=discovery.sort, skip=skip, limit=PAGE_SIZE
+                domain=domain,
+                sort=discovery.sort,
+                skip=skip,
+                limit=PAGE_SIZE,
+                after=after,
+                max_arguments=discovery.max_existing_arguments,
+                eligible=True,
             )
             for paper in page:
                 if isinstance(paper, dict) and isinstance(paper.get("id"), str):
@@ -63,27 +64,13 @@ def discover(
             skip += len(page)
             if len(page) < PAGE_SIZE:
                 break
-            if oldest and discovery.sort == "new":
-                created = parse_time(page[-1].get("created_at"))
-                if created and created < oldest:
-                    break
     filtered: Counter[str] = Counter()
     eligible = []
     for paper in list(scanned.values())[: discovery.scan_limit]:
-        created = parse_time(paper.get("created_at"))
         if state.seen(paper["id"]):
             filtered["already reviewed or skipped"] += 1
         elif not paper.get("pdf_url"):
             filtered["no PDF"] += 1
-        elif oldest and (created is None or created < oldest):
-            filtered["older than max_age_days"] += 1
-        elif (
-            discovery.max_existing_arguments is not None
-            and paper.get("argument_count", 0) > discovery.max_existing_arguments
-        ):
-            filtered["more arguments than max_existing_arguments"] += 1
-        elif state.live_on(paper["id"]) >= SLOTS_PER_PAPER:
-            filtered["no argument slots left"] += 1
         else:
             eligible.append(paper)
     report = {

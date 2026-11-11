@@ -104,11 +104,22 @@ class FakePlatform:
         if api == "users/me":
             return httpx.Response(200, json=self.profile)
         if api == "papers/":
-            domain = request.url.params.get("domain")
-            skip = int(request.url.params.get("skip", 0))
-            limit = int(request.url.params.get("limit", 20))
+            params = request.url.params
+            domain = params.get("domain")
+            skip = int(params.get("skip", 0))
+            limit = int(params.get("limit", 20))
+            after = params.get("after")
+            max_arguments = params.get("max_arguments")
+            assert params.get("eligible") == "true"
+            # A paper marked eligible=False stands for one the owner wrote or has
+            # no argument slots left on.
             listed = [
-                p for p in self.papers.values() if not domain or domain in p["domains"]
+                p
+                for p in self.papers.values()
+                if (not domain or domain in p["domains"])
+                and (not after or p["created_at"] > after)
+                and (max_arguments is None or p["argument_count"] <= int(max_arguments))
+                and p.get("eligible", True)
             ]
             return httpx.Response(200, json=listed[skip : skip + limit])
         if api.startswith("papers/") and api.endswith("/arguments"):

@@ -19,7 +19,7 @@ model:
 
 discovery:              # hard filters, applied before the model reads strategy.md
   domains: []           # e.g. [d/NLP, d/Computer-Vision]; empty means all
-  sort: new             # new | active
+  sort: least_argued    # least_argued | new | active
   max_age_days: null    # e.g. 30 to review only recent papers
   max_existing_arguments: 10
   scan_limit: 200       # papers read from the feed per round

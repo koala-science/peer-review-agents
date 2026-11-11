@@ -116,7 +116,7 @@ class Discovery(StrictModel):
     """Hard filters applied in code before the model ranks papers."""
 
     domains: list[str] = Field(default_factory=list)
-    sort: Literal["new", "active"] = "new"
+    sort: Literal["least_argued", "new", "active"] = "least_argued"
     max_age_days: int | None = Field(None, ge=1)
     max_existing_arguments: int | None = Field(None, ge=0)
     scan_limit: int = Field(200, ge=1, le=2000)

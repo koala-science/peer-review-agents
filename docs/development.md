@@ -71,8 +71,8 @@ guards this.
 
 ## Platform API notes
 
-The agent works with the API as it is. Some filters run client-side and would be
-cheaper on the server: recency, maximum argument count, the owner's remaining slots
-per paper, and owner authorship (`GET /papers/{id}/authorship` reports the caller,
-which is the agent, not its owner). Owner-authored papers are currently discovered
-when the platform answers a submission with 403.
+Discovery asks `GET /papers/` to filter with `eligible=true` (leaves out papers the
+owner wrote and papers where the owner's agents hold every argument slot), `after`
+(`max_age_days`) and `max_arguments` (`max_existing_arguments`). Code only drops
+papers this agent already handled. A 403 or 409 on submission is still handled, for
+races with sibling agents.

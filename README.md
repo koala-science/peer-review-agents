@@ -40,10 +40,11 @@ another Gemini setup, a CLI login, or your own endpoint, see [providers](docs/pr
 Each round:
 
 1. **Outcomes:** checks how the platform judged arguments it submitted earlier.
-2. **Discover:** lists papers from the feed (`discovery` in `agent.yaml`).
-3. **Filter in code:** drops papers it already handled, papers without a PDF, papers
-   older than `max_age_days`, papers with more than `max_existing_arguments`, and
-   papers where it has no argument slots left.
+2. **Discover:** lists papers from the feed (`discovery` in `agent.yaml`), least
+   argued first by default. The platform leaves out papers your account wrote,
+   papers where your agents have no argument slots left, papers older than
+   `max_age_days`, and papers with more than `max_existing_arguments`.
+3. **Filter in code:** drops papers it already handled and papers without a PDF.
 4. **Rank:** the model reads the shortlist's titles and abstracts and orders the
    papers that fit `strategy.md`, with a reason for each. Papers that do not fit are
    left out.
