@@ -4,6 +4,7 @@ import asyncio
 import json
 
 import pytest
+import yaml
 from fakes import PAPER_LINES, ScriptedModel, agent_dir
 
 from koala_science.config import load_config
@@ -12,13 +13,18 @@ from koala_science.sources import read_source
 from koala_science.types import PLATFORM_CHECKS
 
 
-def review(tmp_path, model, *, verifier=None, known=None):
-    loaded = load_config(agent_dir(tmp_path) / "agent.yaml")
+def review(tmp_path, model, *, verifier=None, known=None, search=None, **settings):
+    root = agent_dir(tmp_path)
+    if settings:
+        config = yaml.safe_load((root / "agent.yaml").read_text())
+        config["review"].update(settings)
+        (root / "agent.yaml").write_text(yaml.safe_dump(config))
+    loaded = load_config(root / "agent.yaml")
     paper = tmp_path / "paper.md"
     paper.write_text("\n".join(PAPER_LINES) + "\n")
     providers = {"model": model, **({"verifier": verifier} if verifier else {})}
     return asyncio.run(
-        Reviewer(loaded, providers).review(
+        Reviewer(loaded, providers, search=search).review(
             read_source(paper),
             paper={"id": "p1", "title": "A paper", "abstract": "About A."},
             known_arguments=known,
@@ -234,3 +240,70 @@ def test_quote_check_tolerates_extraction_noise_not_different_words(page, excerp
         ],
     )
     assert (check_evidence(candidate, spans, set(spans)) is None) is ok
+
+
+class FakeSearch:
+    def __init__(self, fail=False):
+        self.queries, self.fail = [], fail
+
+    async def __call__(self, query):
+        self.queries.append(query)
+        if self.fail:
+            raise RuntimeError("secret upstream text")
+        return [{"title": f"Prior work on {query}", "year": 2024}]
+
+
+def test_model_can_search_before_proposing_and_sees_the_results(tmp_path):
+    model = ScriptedModel(searches={"proposal": ["epoch-matched baselines"]})
+    search = FakeSearch()
+    result = review(tmp_path, model, search=search)
+    assert search.queries == ["epoch-matched baselines"]
+    assert model.stages == ["claim_map", "proposal", "proposal", "evidence"]
+    first, second = (json.loads(r.messages[-1].content) for r in model.requests[1:3])
+    assert first["literature"] == [] and first["searches_left"] == 4
+    assert second["searches_left"] == 3
+    assert second["literature"] == [
+        {
+            "query": "epoch-matched baselines",
+            "results": [
+                {"title": "Prior work on epoch-matched baselines", "year": 2024}
+            ],
+        }
+    ]
+    # The verifier sees what the proposer found.
+    assert json.loads(model.requests[3].messages[-1].content)["literature"]
+    assert len(result.arguments) == 1
+    assert result.manifest["review"]["literature"] == second["literature"]
+    assert {
+        "search": "epoch-matched baselines",
+        "results": 1,
+        "error": None,
+    }.items() <= next(d for d in result.diagnostics if "search" in d).items()
+
+
+def test_searches_stop_at_the_per_paper_limit(tmp_path):
+    model = ScriptedModel(searches={"proposal": ["a", "b", "c"], "evidence": ["d"]})
+    search = FakeSearch()
+    result = review(tmp_path, model, search=search, max_searches=2)
+    assert search.queries == ["a", "b"]
+    # The third request is answered as is: no searches left, no candidate.
+    assert model.stages == ["claim_map", "proposal", "proposal", "proposal"]
+    assert json.loads(model.requests[-1].messages[-1].content)["searches_left"] == 0
+    assert result.arguments == []
+
+
+def test_claim_map_cannot_search(tmp_path):
+    model = ScriptedModel()
+    review(tmp_path, model, search=FakeSearch())
+    assert json.loads(model.requests[0].messages[-1].content)["searches_left"] == 0
+
+
+def test_failed_search_is_reported_to_the_model_without_details(tmp_path):
+    model = ScriptedModel(searches={"proposal": ["anything"]})
+    result = review(tmp_path, model, search=FakeSearch(fail=True))
+    later = json.loads(model.requests[2].messages[-1].content)
+    assert later["literature"] == [
+        {"query": "anything", "error": "Literature search failed"}
+    ]
+    assert "secret" not in json.dumps(result.manifest)
+    assert len(result.arguments) == 1

@@ -51,6 +51,11 @@ Each round:
 5. **Review** each selected paper with the whole paper in every model call: find
    its most consequential claims (`max_claims`), propose an argument for each, and
    check each one. The arguments already on the paper are included for uniqueness.
+   While proposing and checking, the model can search the literature
+   ([OpenAlex](https://openalex.org), or Semantic Scholar when
+   `SEMANTIC_SCHOLAR_API_KEY` is set) for a specific idea, up to
+   `max_searches` per paper, for example to judge whether a result is new or a
+   stronger baseline exists. Arguments still quote only the paper itself.
    A paper too long for `max_input_tokens_per_call` is skipped and logged, never
    reviewed in pieces.
 6. **Submit** up to `max_arguments_per_paper` arguments that passed every check.

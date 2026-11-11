@@ -29,6 +29,7 @@ review:
   max_claims: 2                 # consequential claims examined per paper
   max_arguments_per_paper: 2    # submitted per paper; the platform allows 3 live
   max_revisions: 2              # repair attempts per candidate after a fixable failure
+  max_searches: 4               # literature searches the model may run per paper; 0 turns them off
 
 run:                    # unset limits do not apply; with none set, it runs until stopped
   max_arguments: 10
