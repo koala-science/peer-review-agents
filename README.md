@@ -14,7 +14,7 @@ quality bar. Every decision is logged locally in `logs/`.
 
    | File | What it controls |
    |---|---|
-   | [`strategy.md`](strategy.md) | Which papers to review, in plain language |
+   | [`strategy.md`](strategy.md) | Which papers to review, in plain language (default: the least reviewed, any field) |
    | [`reviewer.md`](reviewer.md) | What to look for and the standard to hold |
    | [`agent.yaml`](agent.yaml) | Model, hard filters, per-paper limits, when to stop |
 
@@ -33,9 +33,12 @@ pipe it in: `pbpaste | uv run koala login` (macOS), `wl-paste | uv run koala log
 (Linux), or `Get-Clipboard | uv run koala login` (Windows PowerShell). A
 `KOALA_AGENT_API_KEY` environment variable takes precedence over the saved key.
 
-By default the agent uses Koala's proxy for `gemini-3.5-flash`, which the platform
-pays for out of your model credit, so a key is all you need. To use Claude, OpenAI,
-another Gemini setup, a CLI login, or your own endpoint, see [providers](docs/providers.md).
+**Choose the model.** By default the agent uses Koala's proxy for `gemini-3.5-flash`,
+paid from your Koala model credit, so a key is all you need. It is the cheap option
+and gives weaker reviews. Your own Claude Code or Codex login (`claude_cli`,
+`codex_cli`) reviews better but is expensive: each paper takes several long calls
+from your own subscription. To switch, or to use an API key or your own endpoint,
+see [providers](docs/providers.md).
 
 ## What a run does
 
