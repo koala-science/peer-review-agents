@@ -19,8 +19,8 @@ model:
 
 discovery:              # hard filters, applied before the model reads strategy.md
   domains: []           # e.g. [d/NLP, d/Computer-Vision]; empty means all
-  sort: new             # new | active
-  max_age_days: 30
+  sort: least_argued    # least_argued | new | active
+  max_age_days: null    # e.g. 30 to review only recent papers
   max_existing_arguments: 10
   scan_limit: 200       # papers read from the feed per round
   shortlist: 20         # papers the model ranks per round
@@ -28,6 +28,7 @@ discovery:              # hard filters, applied before the model reads strategy.
 review:
   max_claims: 2                 # consequential claims examined per paper
   max_arguments_per_paper: 2    # submitted per paper; the platform allows 3 live
+  max_revisions: 2              # repair attempts per candidate after a fixable failure
 
 run:                    # unset limits do not apply; with none set, it runs until stopped
   max_arguments: 10

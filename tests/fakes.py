@@ -104,11 +104,22 @@ class FakePlatform:
         if api == "users/me":
             return httpx.Response(200, json=self.profile)
         if api == "papers/":
-            domain = request.url.params.get("domain")
-            skip = int(request.url.params.get("skip", 0))
-            limit = int(request.url.params.get("limit", 20))
+            params = request.url.params
+            domain = params.get("domain")
+            skip = int(params.get("skip", 0))
+            limit = int(params.get("limit", 20))
+            after = params.get("after")
+            max_arguments = params.get("max_arguments")
+            assert params.get("eligible") == "true"
+            # A paper marked eligible=False stands for one the owner wrote or has
+            # no argument slots left on.
             listed = [
-                p for p in self.papers.values() if not domain or domain in p["domains"]
+                p
+                for p in self.papers.values()
+                if (not domain or domain in p["domains"])
+                and (not after or p["created_at"] > after)
+                and (max_arguments is None or p["argument_count"] <= int(max_arguments))
+                and p.get("eligible", True)
             ]
             return httpx.Response(200, json=listed[skip : skip + limit])
         if api.startswith("papers/") and api.endswith("/arguments"):
@@ -162,7 +173,13 @@ class ScriptedModel:
         revision: str | None = None,
         excerpt: str | None = None,
         claims: int = 1,
+        bad_quotes: int = 0,
+        stubborn: bool = False,
     ) -> None:
+        # bad_quotes: how many proposal/revision attempts quote text not in the paper.
+        # stubborn: revisions still fail the verifier's `fail` checks.
+        self.bad_quotes = bad_quotes
+        self.stubborn = stubborn
         self.claims = claims
         self.proposals = 0
         self.rank = rank
@@ -193,17 +210,21 @@ class ScriptedModel:
                     {
                         "claim": f"Method A outperforms baseline B ({n}).",
                         "why_it_matters": "It is the headline result.",
-                        "span_ids": [s["id"] for s in data["spans"]],
+                        "span_ids": [s["id"] for s in data["paper_text"]],
                     }
                     for n in range(self.claims)
                 ]
             }
         elif stage in {"proposal", "revision"}:
-            span = next(s for s in data["spans"] if "40 epochs" in s["text"])
+            span = next(s for s in data["paper_text"] if "40 epochs" in s["text"])
+            source_id = data["paper"]["source_id"]
             excerpt = (
                 self.excerpt
                 or "trained for 40 epochs while baseline B was trained for 10"
             )
+            if self.bad_quotes > 0:
+                self.bad_quotes -= 1
+                excerpt = "trained for 400 epochs while baseline B was trained for 10"
             statement = (
                 "The accuracy gain of the proposed method over the baseline is confounded "
                 "by four times more training epochs."
@@ -222,11 +243,11 @@ class ScriptedModel:
                         "rationale": "The method trained for 40 epochs and the baseline for 10, so the 81.2 versus 76.0 gap may come from training length.",
                         "evidence": [
                             {
-                                "source_id": span["source_id"],
+                                "source_id": source_id,
                                 "span_id": span["id"],
                                 "page": span["page"],
-                                "line_start": span["line_start"],
-                                "line_end": span["line_end"],
+                                "line_start": span.get("line_start"),
+                                "line_end": span.get("line_end"),
                                 "excerpt": excerpt,
                             }
                         ],
@@ -237,7 +258,7 @@ class ScriptedModel:
             }
         elif stage == "evidence":
             revised = "equal-duration" in data["candidates"][0]["statement"]
-            failing = set() if revised else self.fail
+            failing = set() if revised and not self.stubborn else self.fail
             output = {
                 name: check(name not in failing, f"{name} judged")
                 for name in (
@@ -249,7 +270,6 @@ class ScriptedModel:
                 )
             }
             output["revision"] = None if revised else self.revision
-            output["requested_span_ids"] = []
         else:
             output = {"duplicate": False, "reason": "distinct"}
         return ModelResponse(text=json.dumps(output), model="fake")

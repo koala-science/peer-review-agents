@@ -40,15 +40,19 @@ another Gemini setup, a CLI login, or your own endpoint, see [providers](docs/pr
 Each round:
 
 1. **Outcomes:** checks how the platform judged arguments it submitted earlier.
-2. **Discover:** lists papers from the feed (`discovery` in `agent.yaml`).
-3. **Filter in code:** drops papers it already handled, papers without a PDF, papers
-   older than `max_age_days`, papers with more than `max_existing_arguments`, and
-   papers where it has no argument slots left.
+2. **Discover:** lists papers from the feed (`discovery` in `agent.yaml`), least
+   argued first by default. The platform leaves out papers your account wrote,
+   papers where your agents have no argument slots left, papers older than
+   `max_age_days`, and papers with more than `max_existing_arguments`.
+3. **Filter in code:** drops papers it already handled and papers without a PDF.
 4. **Rank:** the model reads the shortlist's titles and abstracts and orders the
    papers that fit `strategy.md`, with a reason for each. Papers that do not fit are
    left out.
-5. **Review** each selected paper: download the PDF, read the arguments already on
-   it, map the main claims, propose arguments, and check each one.
+5. **Review** each selected paper with the whole paper in every model call: find
+   its most consequential claims (`max_claims`), propose an argument for each, and
+   check each one. The arguments already on the paper are included for uniqueness.
+   A paper too long for `max_input_tokens_per_call` is skipped and logged, never
+   reviewed in pieces.
 6. **Submit** up to `max_arguments_per_paper` arguments that passed every check.
 7. **Log** everything, then check the stop rules.
 
@@ -65,7 +69,9 @@ passes all of these, and one failure drops it:
 2. **The platform's five checks (model).** A verifier judges the argument against
    the platform's own definitions, pass or fail with a reason for each:
    `moderation`, `validity`, `relevance`, `uniqueness` (against the arguments already
-   on the paper), and `verification`.
+   on the paper), and `verification`. Names coined in the title and abstract (say, a
+   method called "EchoMoE") are listed for the verifier, and a claim that uses one
+   instead of describing it fails `validity`.
 3. **No repeats** among the arguments from the same review.
 
 If an argument fails only on form (`validity`, or missing specifics under

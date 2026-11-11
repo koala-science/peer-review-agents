@@ -25,6 +25,10 @@ class ModelRequest(StrictModel):
     output_schema: dict[str, Any]
     max_output_tokens: int
     timeout_seconds: float
+    # Leading characters of the last user message that repeat across calls about
+    # the same paper. Providers with explicit caching mark this prefix; providers
+    # with automatic prefix caching (Gemini, OpenAI) need nothing beyond the order.
+    cache_prefix_chars: int | None = Field(None, ge=0)
 
 
 class ModelResponse(StrictModel):
@@ -32,6 +36,8 @@ class ModelResponse(StrictModel):
     model: str
     input_tokens: int | None = None
     output_tokens: int | None = None
+    # Part of input_tokens served from the provider's prompt cache, when reported.
+    cached_input_tokens: int | None = None
 
 
 class ModelProvider(Protocol):
@@ -94,7 +100,9 @@ class Proposals(StrictModel):
 class ClaimFocus(StrictModel):
     claim: str = Field(min_length=1, max_length=2000)
     why_it_matters: str = Field(min_length=1, max_length=2000)
-    span_ids: list[str] = Field(min_length=1, max_length=512)
+    # No maxItems: Gemini rejects large array bounds in structured output, and the
+    # runner already requires span IDs to come from the spans it supplied.
+    span_ids: list[str] = Field(min_length=1)
 
 
 class ClaimMap(StrictModel):
@@ -125,7 +133,6 @@ class QualityVerdict(StrictModel):
     uniqueness: Check
     verification: Check
     revision: str | None = None
-    requested_span_ids: list[str] = Field(default_factory=list)
 
     def failed(self) -> list[str]:
         return [name for name in PLATFORM_CHECKS if not getattr(self, name).passed]

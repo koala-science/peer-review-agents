@@ -15,7 +15,15 @@ from koala_science.platform import PlatformClient
 
 
 def run_agent(
-    tmp_path, platform, model=None, *, dry_run=False, once=False, proxy=False, **rules
+    tmp_path,
+    platform,
+    model=None,
+    *,
+    dry_run=False,
+    once=False,
+    proxy=False,
+    said=None,
+    **rules,
 ):
     root = agent_dir(tmp_path, **rules)
     if proxy:
@@ -47,7 +55,7 @@ def run_agent(
         dry_run=dry_run,
         clock=lambda: now[0],
         sleep=sleep,
-        say=lambda line: None,
+        say=(said.append if said is not None else lambda line: None),
     )
     reason = loop.run(once=once)
     return reason, audit, root, model
@@ -104,17 +112,19 @@ def test_hard_filters_run_before_the_model_ranks(tmp_path):
             paper("fresh"),
             paper("old", created_at=iso(90)),
             paper("busy", argument_count=50),
+            paper("owned", eligible=False),
             paper("nopdf", pdf_url=None),
         ]
     )
     _, audit, _, model = run_agent(tmp_path, platform, once=True)
+    listing = next(r for r in platform.requests if r.url.path.endswith("/papers/"))
+    assert listing.url.params["sort"] == "least_argued"
+    assert listing.url.params["max_arguments"] == "10"
+    assert listing.url.params["after"] < iso(29)
     selection = lines(audit.run_dir / "selection.jsonl")[0]
+    assert selection["scanned"] == 2
     assert [p["id"] for p in selection["shortlist"]] == ["fresh"]
-    assert selection["filtered"] == {
-        "older than max_age_days": 1,
-        "more arguments than max_existing_arguments": 1,
-        "no PDF": 1,
-    }
+    assert selection["filtered"] == {"no PDF": 1}
     ranking_request = json.loads(model.requests[0].messages[-1].content)
     assert [c["paper_id"] for c in ranking_request["candidates"]] == ["fresh"]
     assert "Paper selection strategy" in model.requests[0].messages[0].content
@@ -154,6 +164,28 @@ def test_outcomes_are_recorded_including_moderation_withholding(tmp_path):
     assert outcome["state"] == "accepted"
     state = json.loads((tmp_path / "logs" / "state.json").read_text())
     assert state["arguments"]["arg-1"]["state"] == "accepted"
+
+
+def test_rejection_reason_is_shown(tmp_path):
+    platform = FakePlatform([paper("p1")])
+    run_agent(tmp_path, platform, once=True)
+    [argument] = platform.arguments["p1"]
+    argument["state"] = "rejected"
+    argument["checks"] = [
+        {"name": "uniqueness", "status": "passed", "summary": None, "detail": None},
+        {
+            "name": "verification",
+            "status": "failed",
+            "summary": "Checking the evidence timed out.",
+            "detail": "It was still looking for the second quote.",
+        },
+    ]
+    said = []
+    run_agent(tmp_path, platform, once=True, said=said)
+    assert (
+        "  outcome: arg-1 on p1 is rejected (verification: Checking the evidence"
+        " timed out. It was still looking for the second quote.)"
+    ) in said
 
 
 def test_withheld_argument_is_recorded(tmp_path):
@@ -271,3 +303,15 @@ def test_refused_paper_gets_no_further_submissions(tmp_path):
     assert len([r for r in platform.requests if r.method == "POST"]) == 1
     state = json.loads((root / "logs" / "state.json").read_text())
     assert state["reviewed"]["p1"]["passed_local_checks"] == 2
+
+
+def test_too_long_paper_is_skipped_and_not_retried(tmp_path, monkeypatch):
+    from koala_science import runner
+
+    monkeypatch.setattr(runner, "PROMPT_ALLOWANCE", 10_000_000)
+    platform = FakePlatform([paper("p1")])
+    _, _, root, model = run_agent(tmp_path, platform, once=True)
+    state = json.loads((root / "logs" / "state.json").read_text())
+    assert "max_input_tokens_per_call" in state["skipped"]["p1"]["reason"]
+    assert model.stages == ["rank"]
+    assert platform.posts() == []

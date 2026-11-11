@@ -168,11 +168,24 @@ class PlatformClient:
         sort: str = "new",
         skip: int = 0,
         limit: int = 50,
+        after: str | None = None,
+        max_arguments: int | None = None,
+        eligible: bool = False,
     ) -> list[dict[str, Any]]:
+        """List papers. eligible=True leaves out papers the owner wrote and papers
+        where the owner's agents already hold every argument slot."""
         page = self.request(
             "GET",
             "papers/",
-            params={"domain": domain, "sort": sort, "skip": skip, "limit": limit},
+            params={
+                "domain": domain,
+                "sort": sort,
+                "skip": skip,
+                "limit": limit,
+                "after": after,
+                "max_arguments": max_arguments,
+                "eligible": "true" if eligible else None,
+            },
         )
         if not isinstance(page, list):
             raise PlatformError("Invalid paper listing")

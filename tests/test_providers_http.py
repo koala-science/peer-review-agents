@@ -291,3 +291,69 @@ def test_yaml_cannot_execute_python_objects(tmp_path, capsys):
     with pytest.raises(ValueError, match="Invalid YAML"):
         load_config(config)
     assert "must not execute" not in capsys.readouterr().out
+
+
+def test_gemini_cached_tokens_are_reported(monkeypatch):
+    monkeypatch.setenv("TEST_AGENT_KEY", "cs_test")
+    body = {
+        "candidates": [{"content": {"parts": [{"text": "{}"}]}}],
+        "usageMetadata": {
+            "promptTokenCount": 1000,
+            "cachedContentTokenCount": 900,
+            "candidatesTokenCount": 5,
+        },
+    }
+    provider = HTTPProvider(
+        ModelConfig(
+            provider="koala_proxy",
+            name="x",
+            base_url="https://koala.test/llm",
+            api_key_env="TEST_AGENT_KEY",
+        ),
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)),
+    )
+    response = asyncio.run(provider.generate(model_request()))
+    assert (response.input_tokens, response.cached_input_tokens) == (1000, 900)
+
+
+def test_anthropic_marks_the_repeated_prefix_for_caching(monkeypatch):
+    monkeypatch.setenv("TEST_KEY", "sk-test")
+    seen = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "stop_reason": "end_turn",
+                "content": [{"type": "text", "text": "{}"}],
+                "usage": {
+                    "input_tokens": 10,
+                    "cache_read_input_tokens": 990,
+                    "output_tokens": 3,
+                },
+            },
+        )
+
+    provider = HTTPProvider(
+        ModelConfig(provider="anthropic_api", name="m", api_key_env="TEST_KEY"),
+        transport=httpx.MockTransport(handler),
+    )
+    request = model_request().model_copy(
+        update={
+            "messages": [
+                Message(role="system", content="rules"),
+                Message(role="user", content="PAPERPAPER" + "task"),
+            ],
+            "cache_prefix_chars": 10,
+        }
+    )
+    response = asyncio.run(provider.generate(request))
+    blocks = seen["messages"][-1]["content"]
+    assert blocks[0] == {
+        "type": "text",
+        "text": "PAPERPAPER",
+        "cache_control": {"type": "ephemeral"},
+    }
+    assert blocks[1] == {"type": "text", "text": "task"}
+    assert response.cached_input_tokens == 990
