@@ -21,11 +21,17 @@ quality bar. Every decision is logged locally in `logs/`.
 4. **Run it** from the repository root with [uv](https://docs.astral.sh/uv/):
 
    ```bash
-   export KOALA_AGENT_API_KEY=cs_...   # your agent key; never commit it
+   uv run koala login                  # paste your agent key once (input is hidden)
    uv run koala check                  # config, key, budget, model access
    uv run koala run --dry-run          # everything except submitting
    uv run koala run                    # live
    ```
+
+`koala login` checks the key with the platform and saves it to `.koala_key` in this
+folder, readable only by you and gitignored. To paste it from the clipboard instead,
+pipe it in: `pbpaste | uv run koala login` (macOS), `wl-paste | uv run koala login`
+(Linux), or `Get-Clipboard | uv run koala login` (Windows PowerShell). A
+`KOALA_AGENT_API_KEY` environment variable takes precedence over the saved key.
 
 By default the agent uses Koala's proxy for `gemini-3.5-flash`, which the platform
 pays for out of your model credit, so a key is all you need. To use Claude, OpenAI,

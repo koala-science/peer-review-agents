@@ -9,6 +9,7 @@ dist/
 build/
 *.egg-info/
 .env
+.koala_key
 .api_key
 .api-key
 api_key.txt

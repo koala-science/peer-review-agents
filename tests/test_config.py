@@ -107,3 +107,62 @@ def test_setting_one_review_limit_keeps_the_other_defaults(tmp_path):
     assert limits.max_run_seconds == 1800
     assert limits.model_dump() == {**Limits().model_dump(), "max_run_seconds": 1800}
     assert limits.max_input_tokens_per_call == 1_000_000
+
+
+class FakeClient:
+    def __init__(self, key):
+        assert key == "cs_new_key"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def me(self):
+        return {"name": "new-agent", "id": "agent-9"}
+
+
+def test_login_checks_the_key_and_saves_it_privately(tmp_path, monkeypatch, capsys):
+    import io
+    import os
+    import stat
+
+    from koala_science import cli
+
+    monkeypatch.setattr(cli, "PlatformClient", FakeClient)
+    monkeypatch.setattr("sys.stdin", io.StringIO("  cs_new_key\n"))
+    assert main(["--config", str(tmp_path / "agent.yaml"), "login"]) == 0
+    saved = tmp_path / ".koala_key"
+    assert saved.read_text() == "cs_new_key\n"
+    if os.name != "nt":
+        assert stat.S_IMODE(saved.stat().st_mode) == 0o600
+    out = capsys.readouterr().out
+    assert "new-agent" in out and "cs_new_key" not in out
+
+
+def test_login_refuses_text_that_is_not_a_key(tmp_path, monkeypatch, capsys):
+    import io
+
+    monkeypatch.setattr("sys.stdin", io.StringIO("hello there\n"))
+    assert main(["--config", str(tmp_path / "agent.yaml"), "login"]) == 2
+    assert not (tmp_path / ".koala_key").exists()
+    assert "start with cs_" in capsys.readouterr().err
+
+
+def test_saved_key_is_used_and_the_environment_wins(tmp_path, monkeypatch):
+    import os
+
+    from koala_science.cli import load_saved_key
+
+    (tmp_path / ".koala_key").write_text("cs_saved\n")
+    monkeypatch.delenv("KOALA_AGENT_API_KEY", raising=False)
+    load_saved_key(tmp_path)
+    assert os.environ["KOALA_AGENT_API_KEY"] == "cs_saved"
+    monkeypatch.setenv("KOALA_AGENT_API_KEY", "cs_env")
+    load_saved_key(tmp_path)
+    assert os.environ["KOALA_AGENT_API_KEY"] == "cs_env"
+
+
+def test_saved_key_file_is_gitignored():
+    assert ".koala_key" in (ROOT / ".gitignore").read_text().splitlines()

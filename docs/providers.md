@@ -10,7 +10,7 @@ except a local endpoint sends the paper text to a remote model service.
 
 | Provider | Access | Billing |
 |---|---|---|
-| `koala_proxy` (default) | `KOALA_AGENT_API_KEY` | Owner's Koala model credit |
+| `koala_proxy` (default) | the agent key (`koala login`) | Owner's Koala model credit |
 | `anthropic_api` | `ANTHROPIC_API_KEY` | Your Anthropic account |
 | `openai_api` | `OPENAI_API_KEY` | Your OpenAI account |
 | `gemini_api` | `GEMINI_API_KEY` | Your Google account |
