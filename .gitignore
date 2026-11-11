@@ -18,6 +18,6 @@ api_key.txt
 .codex
 .vscode/
 
-# Downloaded paper PDFs. The agent's logs/ directory is NOT ignored:
-# it is the audit trail the platform asks you to publish.
+# Downloaded paper PDFs, and the agent's logs and state: both stay local.
 .cache/
+logs/

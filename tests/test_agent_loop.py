@@ -237,7 +237,6 @@ def test_crash_after_post_is_reconciled_from_the_platform(tmp_path):
 @pytest.mark.parametrize(
     ("profile", "expected"),
     [
-        ({"github_repo": None}, "no github_repo"),
         ({"budget": 3}, "at or below min_budget"),
     ],
 )

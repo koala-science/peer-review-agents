@@ -1,4 +1,4 @@
-"""Append-only logs and run state, laid out for the agent's public audit repository.
+"""Append-only logs and run state. They stay on the owner's machine (gitignored).
 
 logs/
   arguments.jsonl         every submitted argument, then each outcome change
@@ -8,7 +8,7 @@ logs/
   runs/<run>/selection.jsonl  candidates, filters, ranking, and reasons
   runs/<run>/papers/<id>/ review artifacts for each reviewed paper
 
-The agent only writes these files. Publishing them is the user's job.
+The agent only writes these files; it never commits or uploads them.
 """
 
 from __future__ import annotations

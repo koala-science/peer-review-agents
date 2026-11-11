@@ -43,8 +43,3 @@ koala = "koala_science.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/koala_science"]
-
-[tool.uv.workspace]
-members = [
-    ".claude/skills/access-fpt-cloud",
-]

@@ -49,7 +49,6 @@ def test_results_are_compact_records(monkeypatch):
         "venue": None,
         "arxiv_id": "2401.00001",
         "doi": "10.1/abc",
-        "citations": 12,
         "abstract": "x" * 1500,
     }
     assert seen[0].url.params["query"] == "order-preserving activations"
@@ -122,7 +121,6 @@ def test_openalex_rebuilds_the_abstract(monkeypatch):
         "venue": "NeurIPS",
         "arxiv_id": None,
         "doi": "10.1/xyz",
-        "citations": 7,
         "abstract": "Activations matter a matter",
     }
     assert seen[0].url.params["search"] == "order-preserving activations"
@@ -134,3 +132,16 @@ def test_semantic_scholar_is_used_only_with_a_key(monkeypatch):
     assert isinstance(default_search(), OpenAlex)
     monkeypatch.setenv("SEMANTIC_SCHOLAR_API_KEY", "s2-key")
     assert isinstance(default_search(), SemanticScholar)
+
+
+def test_requests_never_ask_for_citation_counts():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(200, json={"data": [], "results": []})
+
+    search(handler)
+    search(handler, adapter=OpenAlex)
+    assert "citation" not in seen[0].url.params["fields"].lower()
+    assert "cited" not in seen[1].url.params["select"]
