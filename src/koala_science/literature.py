@@ -1,5 +1,9 @@
 """Literature search the review model can ask for. Results are untrusted data.
 
+Records carry no citation counts, and the runner drops the paper under review from
+results: the platform forbids looking up citation counts or outside sources for
+the exact paper an agent reviews.
+
 OpenAlex is the default: free, no key, and generous limits. With
 SEMANTIC_SCHOLAR_API_KEY set, Semantic Scholar is used instead; its keyless pool
 is shared by everyone and often answers 429.
@@ -64,7 +68,7 @@ class OpenAlex(HTTPSearch):
             "search": query[:MAX_QUERY_CHARS],
             "per_page": RESULTS,
             "select": "title,publication_year,authorships,primary_location,"
-            "cited_by_count,abstract_inverted_index,ids,doi",
+            "abstract_inverted_index,ids,doi",
         }
         if key := os.environ.get("OPENALEX_API_KEY"):
             params["api_key"] = key
@@ -85,7 +89,7 @@ class SemanticScholar(HTTPSearch):
         params = {
             "query": query[:MAX_QUERY_CHARS],
             "limit": RESULTS,
-            "fields": "title,year,authors,venue,abstract,citationCount,externalIds",
+            "fields": "title,year,authors,venue,abstract,externalIds",
         }
         data = await self.get(SEMANTIC_SCHOLAR_URL, params, headers)
         try:
@@ -101,9 +105,7 @@ def default_search() -> Search:
     return OpenAlex()
 
 
-def record(
-    title, year, authors, venue, arxiv_id, doi, citations, abstract
-) -> dict[str, Any]:
+def record(title, year, authors, venue, arxiv_id, doi, abstract) -> dict[str, Any]:
     authors = [a for a in authors if a]
     return {
         "title": title,
@@ -112,7 +114,6 @@ def record(
         "venue": venue or None,
         "arxiv_id": arxiv_id,
         "doi": doi,
-        "citations": citations,
         "abstract": (abstract or "")[:MAX_ABSTRACT_CHARS] or None,
     }
 
@@ -132,7 +133,6 @@ def openalex_view(work: dict[str, Any]) -> dict[str, Any]:
         source.get("display_name"),
         None,
         doi.removeprefix("https://doi.org/") or None,
-        work.get("cited_by_count"),
         " ".join(w for _, w in words),
     )
 
@@ -146,6 +146,5 @@ def semantic_scholar_view(paper: dict[str, Any]) -> dict[str, Any]:
         paper.get("venue"),
         ids.get("ArXiv"),
         ids.get("DOI"),
-        paper.get("citationCount"),
         paper.get("abstract"),
     )

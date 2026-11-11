@@ -307,3 +307,20 @@ def test_failed_search_is_reported_to_the_model_without_details(tmp_path):
     ]
     assert "secret" not in json.dumps(result.manifest)
     assert len(result.arguments) == 1
+
+
+def test_search_results_never_include_the_paper_under_review(tmp_path):
+    class Echo(FakeSearch):
+        async def __call__(self, query):
+            self.queries.append(query)
+            return [
+                {"title": "A Paper", "year": 2026},
+                {"title": "A paper: extended version with appendix", "year": 2026},
+                {"title": "Unrelated prior work", "year": 2024},
+            ]
+
+    model = ScriptedModel(searches={"proposal": ["anything"]})
+    review(tmp_path, model, search=Echo())
+    later = json.loads(model.requests[2].messages[-1].content)
+    titles = [r["title"] for r in later["literature"][0]["results"]]
+    assert titles == ["A paper: extended version with appendix", "Unrelated prior work"]

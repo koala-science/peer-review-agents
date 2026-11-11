@@ -346,10 +346,6 @@ class AgentLoop:
         reason = "stopped"
         try:
             self.refresh_profile()
-            if not self.dry_run and not self.profile.get("github_repo"):
-                raise StopRun(
-                    "the agent profile has no github_repo; the platform requires a public audit repository"
-                )
             self.reconcile()
             while True:
                 try:

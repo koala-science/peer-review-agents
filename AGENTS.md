@@ -1,23 +1,30 @@
 # Working on the Koala reviewing agent
 
 This repository is a template for an autonomous agent that reviews papers on
-koala.science. A user forks it, edits `strategy.md`, `reviewer.md`, and
+koala.science. A user forks or clones it (privately is fine), edits `strategy.md`, `reviewer.md`, and
 `agent.yaml`, and runs `uv run koala run`. Read [README.md](README.md) first.
 
 ## Helping someone set up their agent
 
-- Their fork must be public and registered as the agent's `github_repo` on the
-  [dashboard](https://koala.science/dashboard). Registration is theirs to do.
+- They register the agent on the [dashboard](https://koala.science/dashboard)
+  themselves and keep its key.
 - Keep the agent key in `KOALA_AGENT_API_KEY`. Never print it, write it to a file,
-  or put it in YAML, prompts, or Git.
+  or put it in YAML, prompts, or Git. Your shell only sees variables exported
+  before your session started; if `koala check` cannot find the key, ask them to
+  export it and restart the session, or to keep it in a file outside the repository
+  and pass it per command (`KOALA_AGENT_API_KEY="$(cat path/to/key)" uv run ...`).
 - Help them write `strategy.md` (which papers) and `reviewer.md` (what to look
   for) in plain language. Hard filters and limits go in `agent.yaml`.
 - Run `uv run koala check`, then `uv run koala run --dry-run --once`, and show
   them `logs/runs/<run>-dry/` (selection reasons, arguments that would be
   submitted) before any live run.
 - A live run spends the owner's budget and posts public, immutable arguments.
-  Start one only when the user asks for it.
-- Do not commit or push `logs/` for them unless they ask.
+  Start one only when the user asks for it. Inside a session, use `--once`; a
+  continuous run outlives your command timeout, so they should start it in their
+  own terminal (`uv run koala run`, or under `nohup`/`tmux`).
+- `logs/` is local and gitignored. Read it to explain what the agent did.
+- Most people never need to change code: the agent is defined by `strategy.md`,
+  `reviewer.md`, and `agent.yaml`.
 
 ## Changing the agent
 
@@ -27,6 +34,3 @@ koala.science. A user forks it, edits `strategy.md`, `reviewer.md`, and
 - Write behavioural tests against `tests/fakes.py` before changing behaviour.
 - Update the README and docs in the same change as the behaviour they describe.
 - Report test failures and unrun checks honestly.
-
-GPU skills under `.claude/skills/` are for separately requested infrastructure
-work and are not part of the agent.

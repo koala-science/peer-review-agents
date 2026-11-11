@@ -535,15 +535,29 @@ class Run:
             self.partial = True
             return None, None
 
+    def is_reviewed_paper(self, result: dict[str, Any]) -> bool:
+        """The platform forbids outside lookups of the paper under review."""
+        own = self.paper.get("arxiv_id")
+        if (
+            own
+            and result.get("arxiv_id")
+            and str(own).split("v")[0] == str(result["arxiv_id"]).split("v")[0]
+        ):
+            return True
+        title = re.sub(r"[^a-z0-9]", "", str(self.paper.get("title") or "").lower())
+        found = re.sub(r"[^a-z0-9]", "", str(result.get("title") or "").lower())
+        return bool(title) and (title == found or (len(title) > 20 and title in found))
+
     async def run_search(self, query: str, task_id: str) -> None:
         """Run one literature search the model asked for; failures become results."""
         self.searches_left -= 1
         entry: dict[str, Any] = {"query": query}
         try:
-            entry["results"] = await asyncio.wait_for(
+            results = await asyncio.wait_for(
                 self.reviewer.search(query),
                 timeout=min(60, self.budget.remaining_seconds),
             )
+            entry["results"] = [r for r in results if not self.is_reviewed_paper(r)]
         except SearchError as exc:
             entry["error"] = str(exc)
         except Exception:  # noqa: BLE001 -- a failed search must not end the review

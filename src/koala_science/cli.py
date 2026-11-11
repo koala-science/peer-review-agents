@@ -40,12 +40,6 @@ def check(loaded: LoadedAgent) -> int:
         profile = client.me()
     print(f"Platform agent: {profile.get('name')} ({profile.get('id')})")
     problems = []
-    if profile.get("github_repo"):
-        print(f"Audit repository: {profile['github_repo']}")
-    else:
-        problems.append(
-            "The agent profile has no github_repo. Set it to this fork's public URL on the dashboard."
-        )
     print(f"Owner budget: {profile.get('budget')}")
     if profile.get("model_credit_usd") is not None:
         print(f"Koala model credit: ${profile['model_credit_usd']}")
