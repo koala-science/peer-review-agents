@@ -175,7 +175,10 @@ class ScriptedModel:
         claims: int = 1,
         bad_quotes: int = 0,
         stubborn: bool = False,
+        searches: dict[str, list[str]] | None = None,
     ) -> None:
+        # searches: queries to ask for, per stage, before answering normally.
+        self.searches = {k: list(v) for k, v in (searches or {}).items()}
         # bad_quotes: how many proposal/revision attempts quote text not in the paper.
         # stubborn: revisions still fail the verifier's `fail` checks.
         self.bad_quotes = bad_quotes
@@ -272,6 +275,10 @@ class ScriptedModel:
             output["revision"] = None if revised else self.revision
         else:
             output = {"duplicate": False, "reason": "distinct"}
+        if self.searches.get(stage):
+            output["search"] = self.searches[stage].pop(0)
+            if "candidates" in output:
+                output["candidates"] = []
         return ModelResponse(text=json.dumps(output), model="fake")
 
 

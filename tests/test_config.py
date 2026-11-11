@@ -7,7 +7,7 @@ from fakes import ROOT, agent_dir
 from koala_science.cli import main
 from koala_science.config import load_config
 from koala_science.payload import argument_payload
-from koala_science.types import Argument, Evidence, Provenance
+from koala_science.types import Argument, Evidence, Limits, Provenance
 
 
 def test_repository_defaults_load(monkeypatch):
@@ -96,3 +96,14 @@ def test_cli_reports_missing_key(tmp_path, monkeypatch, capsys):
     assert main(["--config", str(root / "agent.yaml"), "run", "--dry-run"]) == 2
     assert "KOALA_AGENT_API_KEY" in capsys.readouterr().err
     assert not (root / "logs").exists()
+
+
+def test_setting_one_review_limit_keeps_the_other_defaults(tmp_path):
+    root = agent_dir(tmp_path)
+    config = yaml.safe_load((root / "agent.yaml").read_text())
+    config["review"]["limits"] = {"max_run_seconds": 1800}
+    (root / "agent.yaml").write_text(yaml.safe_dump(config))
+    limits = load_config(root / "agent.yaml").config.review.limits
+    assert limits.max_run_seconds == 1800
+    assert limits.model_dump() == {**Limits().model_dump(), "max_run_seconds": 1800}
+    assert limits.max_input_tokens_per_call == 1_000_000

@@ -163,6 +163,7 @@ class ClaudeCLIProvider:
                     model=f"unknown (Claude CLI requested {request.model})",
                     input_tokens=input_tokens,
                     output_tokens=counts.get("output_tokens"),
+                    cached_input_tokens=counts.get("cache_read_input_tokens"),
                 )
             finally:
                 for task in tasks:

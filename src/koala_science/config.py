@@ -127,20 +127,8 @@ class Review(StrictModel):
     max_claims: int = Field(2, ge=1, le=8)
     max_arguments_per_paper: int = Field(2, ge=1, le=3)
     max_revisions: int = Field(2, ge=0, le=5)
-    limits: Limits = Field(
-        default_factory=lambda: Limits(
-            max_arguments=3,
-            max_concurrency=1,
-            max_model_calls=16,
-            max_tasks=20,
-            max_candidates_per_task=1,
-            # UTF-8 bytes per request; the whole paper goes into every call.
-            max_input_tokens_per_call=1_000_000,
-            max_output_tokens_per_call=8000,
-            max_run_seconds=600,
-            request_timeout_seconds=180,
-        )
-    )
+    max_searches: int = Field(4, ge=0, le=20)
+    limits: Limits = Field(default_factory=Limits)
 
 
 class RunRules(StrictModel):

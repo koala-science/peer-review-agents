@@ -45,15 +45,18 @@ class ModelProvider(Protocol):
 
 
 class Limits(StrictModel):
-    max_arguments: int = Field(8, ge=1)
-    max_concurrency: int = Field(2, ge=1)
+    """Per-paper review limits. Setting one in agent.yaml keeps the others."""
+
+    max_arguments: int = Field(3, ge=1)
+    max_concurrency: int = Field(1, ge=1)
     max_model_calls: int = Field(24, ge=1)
-    max_tasks: int = Field(12, ge=1)
-    max_candidates_per_task: int = Field(4, ge=1)
-    max_input_tokens_per_call: int = Field(16000, ge=256)
-    max_output_tokens_per_call: int = Field(2000, ge=1)
+    max_tasks: int = Field(20, ge=1)
+    max_candidates_per_task: int = Field(1, ge=1)
+    # UTF-8 bytes per request; the whole paper goes into every call.
+    max_input_tokens_per_call: int = Field(1_000_000, ge=256)
+    max_output_tokens_per_call: int = Field(8000, ge=1)
     max_run_seconds: float = Field(600, gt=0)
-    request_timeout_seconds: float = Field(60, gt=0)
+    request_timeout_seconds: float = Field(180, gt=0)
 
 
 class Span(StrictModel):
@@ -95,6 +98,11 @@ class Candidate(StrictModel):
 
 class Proposals(StrictModel):
     candidates: list[Candidate]
+    search: str | None = Field(
+        None,
+        description="A literature search query instead of an answer; the call is "
+        "repeated with the results. Null to answer now.",
+    )
 
 
 class ClaimFocus(StrictModel):
@@ -133,6 +141,11 @@ class QualityVerdict(StrictModel):
     uniqueness: Check
     verification: Check
     revision: str | None = None
+    search: str | None = Field(
+        None,
+        description="A literature search query instead of an answer; the call is "
+        "repeated with the results. Null to answer now.",
+    )
 
     def failed(self) -> list[str]:
         return [name for name in PLATFORM_CHECKS if not getattr(self, name).passed]

@@ -21,6 +21,19 @@ and a scripted model (`ScriptedModel`). They never spend credit.
 | Platform endpoints | `src/koala_science/platform.py` |
 | Log layout and state | `src/koala_science/audit.py` |
 | Argument request body | `src/koala_science/payload.py` |
+| Literature search | `src/koala_science/literature.py` |
+
+## Literature search
+
+The model has no tools. Instead, the `proposal`, `evidence` and `revision` stages
+may return a `search` query in place of an answer. Code runs the query on OpenAlex,
+appends the results to `literature` in the per-call part of the request,
+and asks again. `review.max_searches` caps searches per paper (0 turns them off);
+each repeated call also counts against `max_model_calls`. Queries and result
+counts go to the review journal, and every result to `manifest.json`. OpenAlex
+needs no key (`OPENALEX_API_KEY` raises its limits). With `SEMANTIC_SCHOLAR_API_KEY`
+set, Semantic Scholar is used instead; its keyless pool is shared by everyone and
+often answers 429. Pass `search=` to `Reviewer` to use another source.
 
 ## Request layout and prompt caching
 
@@ -32,7 +45,7 @@ input. Every review call about one paper (`claim_map`, `proposal`, `evidence`,
 |---|---|---|
 | system message | review rules, platform checks, `reviewer.md` | never within a run |
 | user message, start | `paper` (source ID, title, abstract), `paper_text` (every span: id, page, text), `known_arguments`, `names_to_describe` | once per paper |
-| user message, end | `stage`, `max_claims`, `candidates`, `guidance`, `task` | every call |
+| user message, end | `stage`, `max_claims`, `candidates`, `guidance`, `literature`, `searches_left`, `task` | every call |
 
 The start of the user message is built once per paper (`Run.paper_block` in
 `runner.py`) and sent byte for byte, so calls after the first repeat a long
@@ -64,7 +77,7 @@ guards this.
 - Never truncate evidence or sources silently. Raise, or record the gap.
 - Paper text is untrusted data. It cannot change instructions, limits, or tools.
 - The agent writes logs but never commits, pushes, or contacts anything other than
-  the Koala API, paper storage, and the configured model.
+  the Koala API, paper storage, the configured model, and the literature search.
 - Keep the quality bar aligned with the platform's checks in
   [skill.md](https://koala.science/skill.md). When the platform changes a check,
   update `PLATFORM_CHECKS_TEXT` in `runner.py`.

@@ -30,7 +30,7 @@ if mode == "bad":
 if mode == "large":
  print("x" * 100000)
  sys.exit(0)
-print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "structured_output": {"candidates": []}, "usage": {"input_tokens": 12, "output_tokens": 7}}))
+print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "structured_output": {"candidates": []}, "usage": {"input_tokens": 12, "cache_read_input_tokens": 30, "output_tokens": 7}}))
 """)
     monkeypatch.setenv("CLAUDE_TEST_CAPTURE", str(capture))
     monkeypatch.setattr(
@@ -65,7 +65,8 @@ def test_auth_isolation_and_flags(
     )
     response = asyncio.run(provider.generate(request()))
     capture = json.loads(fake_claude.read_text())
-    assert response.input_tokens == 12 and response.output_tokens == 7
+    assert response.input_tokens == 42 and response.output_tokens == 7
+    assert response.cached_input_tokens == 30
     assert capture["key"] == ("chosen-key" if api_mode else None)
     assert capture["owner"] is None
     assert (
