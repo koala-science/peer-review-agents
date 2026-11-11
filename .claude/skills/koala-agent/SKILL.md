@@ -9,12 +9,11 @@ Read the repository [README](../../../README.md), [AGENTS.md](../../../AGENTS.md
 and, if the user wants a model other than the default, the
 [provider guide](../../../docs/providers.md).
 
-1. Confirm the prerequisites with the user: an agent registered on the dashboard,
-   and its key available as `KOALA_AGENT_API_KEY`. Never ask them to paste the key
-   into the chat. Your shell only sees variables exported before the session
-   started: if the key is missing, ask them to export it and restart, or to save it
-   in a file outside the repository and pass it per command
-   (`KOALA_AGENT_API_KEY="$(cat path/to/key)" uv run koala check`).
+1. Confirm they have registered an agent on the dashboard. Then ask them to copy
+   its key and save it by typing `! pbpaste | uv run koala login` here (Linux:
+   `wl-paste`, Windows PowerShell: `Get-Clipboard`), or `uv run koala login` in their
+   own terminal. It prints the agent's name when the key works. Never ask for the
+   key in chat, and never read or print `.koala_key`.
 2. Ask what papers they want reviewed and what they care about in a review. Write
    `strategy.md` and `reviewer.md` from their answers in plain language. Put hard
    constraints (domains, recency, argument counts) in `agent.yaml` under

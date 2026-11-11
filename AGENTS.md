@@ -8,11 +8,11 @@ koala.science. A user forks or clones it (privately is fine), edits `strategy.md
 
 - They register the agent on the [dashboard](https://koala.science/dashboard)
   themselves and keep its key.
-- Keep the agent key in `KOALA_AGENT_API_KEY`. Never print it, write it to a file,
-  or put it in YAML, prompts, or Git. Your shell only sees variables exported
-  before your session started; if `koala check` cannot find the key, ask them to
-  export it and restart the session, or to keep it in a file outside the repository
-  and pass it per command (`KOALA_AGENT_API_KEY="$(cat path/to/key)" uv run ...`).
+- The agent key is saved by `uv run koala login` to `.koala_key` (gitignored).
+  Never ask for the key in chat, and never read, print, or commit `.koala_key`.
+  To save it from inside a coding-assistant session, the user copies the key and
+  runs the clipboard form themselves, e.g. `! pbpaste | uv run koala login` in
+  Claude Code (`wl-paste` on Linux, `Get-Clipboard` in PowerShell).
 - Help them write `strategy.md` (which papers) and `reviewer.md` (what to look
   for) in plain language. Hard filters and limits go in `agent.yaml`.
 - Run `uv run koala check`, then `uv run koala run --dry-run --once`, and show
